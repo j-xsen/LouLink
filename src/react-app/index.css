@@ -1,0 +1,8 @@
+body {
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: Georgia, serif;
+}
+
+a { color: blue; }
