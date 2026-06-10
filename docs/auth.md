@@ -2,60 +2,60 @@
 
 ## Approach
 
-Authentication is session-based. Users log in with email + password (or OAuth in the future). The Worker issues a session token stored as an HttpOnly cookie, and validates it on protected routes.
+Authentication is handled by **Neon Auth**, powered by [Better Auth](https://www.better-auth.com/). It manages registration, login, OAuth providers, and session lifecycle — no custom session tables or password hashing in this app.
 
-**Why not a third-party auth service:** LouLink is a community-focused app with a tight local identity. Keeping auth in-house avoids external dependencies for login, keeps user data local, and keeps costs at zero. If this becomes a burden, migrating to Clerk or a similar service is straightforward.
+Better Auth issues JWTs. The Worker verifies them using the JWKS URL provided by Neon Auth.
 
-## Session Flow
+## Environment Variables
 
-1. `POST /api/auth/register` — create account, hash password (bcrypt or similar), insert user row, create session, set cookie
-2. `POST /api/auth/login` — verify credentials, create session row, set `Set-Cookie: session=<token>; HttpOnly; Secure; SameSite=Strict`
-3. `POST /api/auth/logout` — delete session row, clear cookie
-4. All protected routes call a `requireAuth` middleware that reads the cookie, validates the session against the DB, and attaches the user to context
+Both URLs come from the Neon Console → Auth section:
 
-## Password Hashing
+| Variable | Value | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Neon Console → Connection string | Neon PostgreSQL connection |
+| `AUTH_JWKS_URL` | `https://…neonauth…/neondb/auth/.well-known/jwks.json` | Worker uses this to verify JWTs |
 
-Workers support Web Crypto API. Use PBKDF2 or bcrypt via a Wasm port. Do not store plaintext passwords.
+The **Auth URL** (`https://…neonauth…/neondb/auth`) is for the **frontend** React app (Better Auth client SDK). It is not a Wrangler secret.
 
-```ts
-// hashing with Web Crypto (PBKDF2)
-async function hashPassword(password: string): Promise<string> { ... }
-async function verifyPassword(password: string, hash: string): Promise<boolean> { ... }
+For local dev, put these in `.dev.vars` (gitignored). For production:
+```bash
+wrangler secret put DATABASE_URL
+wrangler secret put AUTH_JWKS_URL
 ```
 
-## Hono Middleware Pattern
+## How It Works
+
+1. The React frontend uses the Better Auth client SDK (initialized with the Auth URL) to handle login/signup and obtain a JWT.
+2. The frontend sends the JWT in the `Authorization: Bearer <token>` header on protected API calls.
+3. The Worker's `requireAuth` middleware verifies the JWT signature using the JWKS URL and extracts the user ID from the `sub` claim.
+4. On first login, the user exists in `neon_auth.user` but has no row in `public.profiles`. The app redirects them to `/onboarding` to pick a username and complete profile setup.
+
+## `requireAuth` Middleware
+
+The middleware lives at `src/worker/auth.ts`:
 
 ```ts
-const requireAuth: MiddlewareHandler = async (c, next) => {
-  const sessionId = getCookie(c, "session");
-  if (!sessionId) return c.json({ error: "Unauthorized" }, 401);
-  const user = await getSessionUser(sessionId, c.env);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  c.set("user", user);
-  await next();
-};
+import { requireAuth } from "./auth";
 
-app.put("/api/users/:id", requireAuth, async (c) => {
-  const user = c.get("user");
+app.put("/api/profiles/:username", requireAuth, async (c) => {
+  const userId = c.get("userId"); // Better Auth user ID
   // ...
 });
 ```
 
+## Onboarding Flow
+
+After first login, Better Auth has a user record but `public.profiles` does not. Protected routes that require a profile should detect this:
+
+```ts
+const [profile] = await sql`
+  SELECT user_id FROM public.profiles WHERE user_id = ${userId}
+`;
+if (!profile) return c.json({ error: "Profile not set up", code: "ONBOARDING_REQUIRED" }, 403);
+```
+
 ## Authorization Rules
 
-- A user may only edit their own profile and links (`user.id === param.id`)
-- The `verified` flag may only be set by an admin — add an `is_admin` boolean to the `users` table and check it in a separate `requireAdmin` middleware
+- A user may only edit their own profile and links — compare `c.get("userId")` to the `profiles.user_id`
+- The `verified` flag may only be set by an admin — gate it behind a `requireAdmin` middleware
 - Profile pages and the directory listing are fully public — no auth required
-
-## Cookie Configuration
-
-```
-HttpOnly    — JS cannot read the token, mitigates XSS
-Secure      — HTTPS only (Cloudflare always terminates TLS)
-SameSite=Strict — mitigates CSRF for same-origin requests
-Path=/api   — scoped to API, not served with static assets
-```
-
-## Future: OAuth
-
-If added later, OAuth providers (Google, GitHub) would flow through `/api/auth/oauth/:provider`. The end result is the same: a session row in Neon and an HttpOnly cookie. The user record gets a nullable `oauth_provider` + `oauth_id` column pair instead of a password hash.

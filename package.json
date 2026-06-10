@@ -12,7 +12,9 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@neondatabase/serverless": "^1.1.0",
 		"hono": "4.11.1",
+		"jose": "^6.2.3",
 		"react": "19.2.1",
 		"react-dom": "19.2.1"
 	},
