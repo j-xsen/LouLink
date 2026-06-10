@@ -5,10 +5,10 @@ import "./App.css";
 function App() {
 	return (
 		<>
-			<div>
-				<h1>LouLink</h1>
-			</div>
 			<div className="card">
+				<h1>LouLink</h1>
+				<p>A free resource for Louisville artists and businesses to compile their internet presences
+				in a public repertoire of peers.</p>
 			</div>
 		</>
 	);
