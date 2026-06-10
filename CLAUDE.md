@@ -15,6 +15,18 @@ pnpm cf-typegen   # Regenerate worker-configuration.d.ts from wrangler bindings
 npx wrangler tail # Stream live worker logs
 ```
 
+## Documentation
+
+Project documentation lives in `docs/`. Read these before working on any feature:
+
+- `docs/overview.md` — What LouLink is, target users, core user flows, verification model
+- `docs/architecture.md` — Full technical architecture, build targets, routing, how frontend and backend connect
+- `docs/database.md` — Neon (PostgreSQL) schema, connection pattern for Workers, migrations
+- `docs/contentful.md` — Contentful CDN for media, asset upload flow, image optimization
+- `docs/auth.md` — Session-based auth, Hono middleware pattern, authorization rules
+- `docs/deployment.md` — Cloudflare Workers deployment, secrets management, custom domain
+- `docs/features.md` — MVP scope, post-MVP roadmap, things that explicitly never go in
+
 ## Architecture
 
 This is a full-stack app that runs entirely on Cloudflare Workers. The single Worker binary serves both the API and the static React SPA.
