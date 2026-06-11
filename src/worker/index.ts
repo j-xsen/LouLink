@@ -123,6 +123,23 @@ app.post("/api/onboarding", requireAuth, async (c) => {
   }
 });
 
+app.put("/api/me/links", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ links?: unknown }>(c);
+  const links = sanitizeLinks(body?.links);
+  if (links === null) return c.json({ error: "Invalid links" }, 400);
+
+  const sql = createDb(c.env.DATABASE_URL);
+  await sql`DELETE FROM public.links WHERE user_id = ${userId}`;
+  for (let i = 0; i < links.length; i++) {
+    await sql`
+      INSERT INTO public.links (user_id, title, url, sort_order)
+      VALUES (${userId}, ${links[i].title}, ${links[i].url}, ${i})
+    `;
+  }
+  return c.json({ ok: true });
+});
+
 app.put("/api/me/username", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ username?: unknown }>(c);

@@ -237,9 +237,9 @@ function useAuth() {
 // ---------------------------------------------------------------------------
 
 function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
-  const { loading, session } = useAuth();
+  const { loading, session, profile } = useAuth();
   if (loading) return <p>Loading…</p>;
-  if (session) return <Navigate to="/" replace />;
+  if (session && profile) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -330,6 +330,7 @@ function useUsernameCheck(username: string) {
 // ---------------------------------------------------------------------------
 
 function Home() {
+  const { session } = useAuth();
   return (
     <>
       <h1>LouLink</h1>
@@ -338,9 +339,15 @@ function Home() {
         internet presences in a public repertoire of their peers.
       </p>
       <p>
-        <Link to="/signin">Sign in</Link>
-        {" · "}
-        <Link to="/signup">Sign up</Link>
+        {session ? (
+          <Link to="/signup">Complete your profile</Link>
+        ) : (
+          <>
+            <Link to="/signin">Sign in</Link>
+            {" · "}
+            <Link to="/signup">Sign up</Link>
+          </>
+        )}
         {" · "}
         <Link to="/create">Create</Link>
       </p>
@@ -354,7 +361,52 @@ function Home() {
 
 function CreatePage() {
   const navigate = useNavigate();
+  const { session, profile, loadSession } = useAuth();
   const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [username, setUsername] = useState("");
+  const checkStatus = useUsernameCheck(username);
+
+  async function handleSave() {
+    if (!session) return;
+    setSaving(true);
+    setSaveError("");
+
+    // No profile yet — create it first via onboarding
+    if (!profile) {
+      if (!username) { setSaveError("Choose a username to save."); setSaving(false); return; }
+      const onboardRes = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({
+          username,
+          display_name: session.name,
+          links: items.filter((it) => it.kind === "link"),
+        }),
+      });
+      const d = await onboardRes.json();
+      if (!onboardRes.ok) { setSaveError(d.error ?? "Failed to create profile."); setSaving(false); return; }
+      clearDraft();
+      await loadSession();
+      navigate("/");
+      return;
+    }
+
+    const res = await fetch("/api/me/links", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ links: items.filter((it) => it.kind === "link") }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      setSaveError(d.error ?? "Failed to save.");
+      setSaving(false);
+      return;
+    }
+    clearDraft();
+    navigate("/");
+  }
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
@@ -574,14 +626,52 @@ function CreatePage() {
         </p>
       )}
 
-      <p style={{ marginTop: "2rem" }}>
-        <button type="button" onClick={() => navigate("/signup")}>
-          Create account to save →
-        </button>
-      </p>
-      <p>
-        Already have an account? <Link to="/signin">Sign in</Link>
-      </p>
+      {session ? (
+        <>
+          {!profile && (
+            <p style={{ marginTop: "2rem" }}>
+              <label>
+                Username (loul.ink/…)<br />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                />
+              </label>
+              {username && (
+                <span>
+                  {" "}
+                  {checkStatus === "checking" && "Checking…"}
+                  {checkStatus === "available" && "✓ Available"}
+                  {checkStatus === "taken" && "✗ Taken"}
+                  {checkStatus === "invalid" && (validateUsername(username) ?? "Invalid")}
+                </span>
+              )}
+            </p>
+          )}
+          {saveError && <p><strong>{saveError}</strong></p>}
+          <p style={{ marginTop: profile ? "2rem" : undefined }}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || (!profile && checkStatus !== "available")}
+            >
+              {saving ? "Saving…" : "Save page →"}
+            </button>
+          </p>
+        </>
+      ) : (
+        <>
+          <p style={{ marginTop: "2rem" }}>
+            <button type="button" onClick={() => navigate("/signup")}>
+              Create account to save →
+            </button>
+          </p>
+          <p>
+            Already have an account? <Link to="/signin">Sign in</Link>
+          </p>
+        </>
+      )}
     </>
   );
 }
@@ -633,9 +723,9 @@ function SignIn() {
 }
 
 function SignUp() {
-  const { loadSession } = useAuth();
+  const { session, loadSession } = useAuth();
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(session?.name ?? "");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -643,13 +733,13 @@ function SignUp() {
   const [submitting, setSubmitting] = useState(false);
   const checkStatus = useUsernameCheck(username);
 
+  const hasSession = !!session;
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const usernameValid = checkStatus === "available" && !validateUsername(username);
   const canSubmit =
     displayName.trim().length > 0 &&
     usernameValid &&
-    emailValid &&
-    password.length >= 8 &&
+    (hasSession || (emailValid && password.length >= 8)) &&
     !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -658,42 +748,50 @@ function SignUp() {
     setSubmitting(true);
     setError("");
 
-    const { error: signUpError } = await authClient.signUp.email({
-      name: displayName,
-      email,
-      password,
-    });
-    if (signUpError) {
-      setError(signUpError.message ?? "Sign up failed.");
-      setSubmitting(false);
-      return;
-    }
+    let jwt: string | null = null;
 
-    const { data } = await authClient.getSession();
-    if (!data?.session) {
-      setError("Could not establish session after sign up.");
-      setSubmitting(false);
-      return;
-    }
+    if (hasSession) {
+      jwt = await getJwt();
+      if (!jwt) {
+        setError("Could not obtain auth token.");
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      const { error: signUpError } = await authClient.signUp.email({
+        name: displayName,
+        email,
+        password,
+      });
+      if (signUpError) {
+        setError(signUpError.message ?? "Sign up failed.");
+        setSubmitting(false);
+        return;
+      }
 
-    const jwt = await getJwt();
-    if (!jwt) {
-      setError("Could not obtain auth token after sign up.");
-      setSubmitting(false);
-      return;
+      const { data } = await authClient.getSession();
+      if (!data?.session) {
+        setError("Could not establish session after sign up.");
+        setSubmitting(false);
+        return;
+      }
+
+      jwt = await getJwt();
+      if (!jwt) {
+        setError("Could not obtain auth token after sign up.");
+        setSubmitting(false);
+        return;
+      }
     }
 
     const draft = getDraft();
     const res = await fetch("/api/onboarding", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${jwt}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
       body: JSON.stringify({
         username,
         display_name: displayName.trim(),
-        links: draft.links ?? [],
+        links: (draft.items ?? []).filter((it) => it.kind === "link"),
       }),
     });
     const d = await res.json();
@@ -710,7 +808,7 @@ function SignUp() {
 
   return (
     <>
-      <h1>Create your account</h1>
+      <h1>{hasSession ? "Choose a username" : "Create your account"}</h1>
       <form onSubmit={handleSubmit}>
         <p>
           <label>
@@ -745,32 +843,36 @@ function SignUp() {
             </span>
           )}
         </p>
-        <p>
-          <label>
-            Email<br />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          {email && (
-            <span>
-              {" "}
-              {emailValid ? "✓ Valid" : "✗ Invalid email"}
-            </span>
-          )}
-        </p>
-        <p>
-          <label>
-            Password<br />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-          {password && (
-            <span>
-              {" "}
-              {password.length >= 8 ? "✓ Good" : `✗ Too short (${password.length}/8)`}
-            </span>
-          )}
-        </p>
+        {!hasSession && (
+          <>
+            <p>
+              <label>
+                Email<br />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </label>
+              {email && (
+                <span>
+                  {" "}
+                  {emailValid ? "✓ Valid" : "✗ Invalid email"}
+                </span>
+              )}
+            </p>
+            <p>
+              <label>
+                Password<br />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </label>
+              {password && (
+                <span>
+                  {" "}
+                  {password.length >= 8 ? "✓ Good" : `✗ Too short (${password.length}/8)`}
+                </span>
+              )}
+            </p>
+          </>
+        )}
         {error && <p><strong>{error}</strong></p>}
-        <p><button type="submit" disabled={!canSubmit}>Create account</button></p>
+        <p><button type="submit" disabled={!canSubmit}>{hasSession ? "Finish setup →" : "Create account"}</button></p>
       </form>
       <p>
         <Link to="/">Back</Link> &middot; <Link to="/signin">Sign in instead</Link>
