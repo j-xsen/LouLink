@@ -16,13 +16,14 @@ import {
 import {
   Globe, Mail, Phone, MapPin,
   Music, Mic, Headphones, Camera,
-  ShoppingBag, Coffee, Heart, Star, Rss,
+  ShoppingBag, Coffee, Heart, Star, Rss, PiggyBank, Landmark, Handshake,
   Link as LinkIcon,
 } from "lucide-react";
 import {
   SiYoutube, SiInstagram, SiFacebook, SiX, SiTwitch,
   SiSpotify, SiBandcamp, SiSoundcloud,
 } from "react-icons/si";
+import NoiseEmporiumIcon from "./assets/NoiseEmporiumIcon";
 import { authClient, getJwt } from "./auth-client";
 
 // ---------------------------------------------------------------------------
@@ -42,8 +43,10 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   // General
   Globe, Mail, Phone, MapPin,
   Music, Mic, Headphones, Camera,
-  ShoppingBag, Coffee, Heart, Star, Rss,
+  ShoppingBag, Coffee, Heart, Star, Rss, PiggyBank, Landmark, Handshake,
   Link: LinkIcon,
+  // Custom
+  Emporium: NoiseEmporiumIcon,
 };
 
 const ICON_OPTIONS = Object.keys(ICON_MAP);
