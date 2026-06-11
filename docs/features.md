@@ -36,9 +36,20 @@ The MVP is the minimum that makes LouLink useful to its first real users.
 These features are explicitly out of scope until the MVP is stable.
 
 ### Analytics
-- Per-link click counts
-- Profile view counts
-- Store events in a KV or D1 table, aggregate in a dashboard widget
+
+Profile owners see a dashboard showing views over time, top referring cities, device breakdown, and referrer sources — similar to Umami but built-in.
+
+**Data sources:**
+- Cloudflare Workers injects geolocation on every request for free via `request.cf` (`country`, `city`, `region`). No external IP-lookup API needed. IP addresses are never stored.
+- User-agent parsing gives browser, OS, and device type.
+- `Referer` header gives traffic source.
+
+**Retention strategy:**
+- Raw events kept for 30 days in `page_view_events`, then purged.
+- A nightly Cloudflare Cron Trigger aggregates the previous day's events into `page_view_daily` (one row per profile per day), which is kept indefinitely.
+- Users see full per-event detail for the last 30 days; older data shows as aggregated daily totals.
+
+**What's tracked per event:** `profile_id`, `timestamp`, `country`, `city`, `browser`, `os`, `device_type`, `referrer`. No PII, no IP address.
 
 ### Categories & Filtering
 - Filter the home page directory by category

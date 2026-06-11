@@ -83,12 +83,48 @@ Email is not stored here — read it by joining `neon_auth.user`.
 | `created_at` | `timestamptz` DEFAULT now() | |
 | `updated_at` | `timestamptz` DEFAULT now() | Auto-updated by trigger |
 
+### `public.page_view_events`
+
+Raw analytics events. Rows are purged after 30 days by a nightly Cron Trigger (see Analytics in `docs/features.md`). No IP addresses are stored — geolocation comes from `request.cf` on the Worker.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PRIMARY KEY | Default `gen_random_uuid()` |
+| `profile_id` | `uuid` NOT NULL | FK → `public.profiles(user_id)` ON DELETE CASCADE |
+| `occurred_at` | `timestamptz` DEFAULT now() | When the page view happened |
+| `country` | `text` | From `request.cf.country` |
+| `city` | `text` | From `request.cf.city` |
+| `browser` | `text` | Parsed from User-Agent |
+| `os` | `text` | Parsed from User-Agent |
+| `device_type` | `text` | `desktop`, `mobile`, or `tablet` |
+| `referrer` | `text` | From `Referer` header, nullable |
+
+### `public.page_view_daily`
+
+Aggregated rollups kept indefinitely. One row per profile per calendar day, written by the nightly Cron Trigger before raw events are purged.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PRIMARY KEY | Default `gen_random_uuid()` |
+| `profile_id` | `uuid` NOT NULL | FK → `public.profiles(user_id)` ON DELETE CASCADE |
+| `day` | `date` NOT NULL | The calendar day being summarized |
+| `total_views` | `integer` NOT NULL | Total page views that day |
+| `by_country` | `jsonb` | `{ "US": 42, "CA": 3 }` |
+| `by_city` | `jsonb` | `{ "Louisville": 38, "Lexington": 4 }` |
+| `by_browser` | `jsonb` | `{ "Chrome": 30, "Safari": 12 }` |
+| `by_device` | `jsonb` | `{ "mobile": 25, "desktop": 17 }` |
+| `by_referrer` | `jsonb` | `{ "instagram.com": 18, "direct": 24 }` |
+
+Unique constraint on `(profile_id, day)` — each day is written once and never updated.
+
 ## Indexes
 
 ```sql
 CREATE UNIQUE INDEX profiles_username_idx ON public.profiles (username);
 CREATE INDEX profiles_verified_category_idx ON public.profiles (category) WHERE verified = true;
 CREATE INDEX links_user_sort_idx ON public.links (user_id, sort_order ASC);
+CREATE INDEX page_view_events_profile_time_idx ON public.page_view_events (profile_id, occurred_at DESC);
+CREATE UNIQUE INDEX page_view_daily_profile_day_idx ON public.page_view_daily (profile_id, day);
 ```
 
 The partial index on `profiles` makes the home page directory query (all verified profiles) efficient.
