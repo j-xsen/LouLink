@@ -4,7 +4,7 @@
 
 Authentication is handled by **Neon Auth**, powered by [Better Auth](https://www.better-auth.com/). It manages registration, login, OAuth providers, and session lifecycle — no custom session tables or password hashing in this app.
 
-Better Auth issues JWTs. The Worker verifies them using the JWKS URL provided by Neon Auth.
+Better Auth issues JWTs signed with **EdDSA** (Ed25519). The Worker verifies them using the JWKS URL provided by Neon Auth. The JWT is fetched from the Neon Auth `/token` endpoint (not the opaque session token returned by `getSession()`).
 
 ## Environment Variables
 

@@ -23,7 +23,7 @@ import {
   SiYoutube, SiInstagram, SiFacebook, SiX, SiTwitch,
   SiSpotify, SiBandcamp, SiSoundcloud,
 } from "react-icons/si";
-import { authClient } from "./auth-client";
+import { authClient, getJwt } from "./auth-client";
 
 // ---------------------------------------------------------------------------
 // Icon system
@@ -164,8 +164,15 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+    const jwt = await getJwt();
+    if (!jwt) {
+      setSession(null);
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
     const s: SessionData = {
-      token: data.session.token,
+      token: jwt,
       name: data.user.name ?? "",
     };
     setSession(s);
@@ -506,12 +513,19 @@ function SignUp() {
       return;
     }
 
+    const jwt = await getJwt();
+    if (!jwt) {
+      setError("Could not obtain auth token after sign up.");
+      setSubmitting(false);
+      return;
+    }
+
     const draft = getDraft();
     const res = await fetch("/api/onboarding", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${data.session.token}`,
+        Authorization: `Bearer ${jwt}`,
       },
       body: JSON.stringify({
         username,
