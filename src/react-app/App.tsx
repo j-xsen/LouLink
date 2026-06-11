@@ -84,16 +84,9 @@ function IconPicker({
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 4,
-            width: 260,
+            width: 280,
           }}
         >
-          <button
-            type="button"
-            onClick={() => { onChange(""); setOpen(false); }}
-            style={{ gridColumn: "1 / -1", textAlign: "left", padding: "4px 6px" }}
-          >
-            — None —
-          </button>
           {ICON_OPTIONS.map((name) => (
             <button
               key={name}
@@ -116,6 +109,19 @@ function IconPicker({
               {name}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            style={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              padding: "4px 6px",
+              background: value === "" ? "#eee" : "transparent",
+              border: value === "" ? "1px solid #999" : "1px solid transparent",
+            }}
+          >
+            — None —
+          </button>
         </div>
       )}
     </span>
@@ -380,7 +386,6 @@ function CreatePage() {
             type="text"
             value={linkTitle}
             onChange={(e) => setLinkTitle(e.target.value)}
-            placeholder="e.g. My Bandcamp"
           />
         </label>
       </p>
@@ -391,16 +396,15 @@ function CreatePage() {
             type="text"
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
-            placeholder="e.g. bandcamp.com/yourbandname"
           />
         </label>
       </p>
-      <p>
+      <div>
         <label>
           Icon<br />
           <IconPicker value={linkIcon} onChange={setLinkIcon} />
         </label>
-      </p>
+      </div>
       <p>
         <button
           type="button"
