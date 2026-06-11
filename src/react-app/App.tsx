@@ -333,6 +333,7 @@ function CreatePage() {
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
+  const [showNewForm, setShowNewForm] = useState(true);
 
   function updateLinks(next: DraftLink[]) {
     setLinks(next);
@@ -356,10 +357,16 @@ function CreatePage() {
     setLinkTitle("");
     setLinkUrl("");
     setLinkIcon("");
+    setShowNewForm(false);
   }
 
   function removeLink(i: number) {
     updateLinks(links.filter((_, idx) => idx !== i));
+  }
+
+  function updateLink(i: number, patch: Partial<DraftLink>) {
+    const next = links.map((l, idx) => idx === i ? { ...l, ...patch } : l);
+    updateLinks(next);
   }
 
   return (
@@ -367,55 +374,91 @@ function CreatePage() {
       <h1>Build your page</h1>
       <p>Add your links below. You can create an account when you're ready to save.</p>
 
-      {links.length > 0 && (
-        <ul>
-          {links.map((l, i) => (
-            <li key={i}>
-              {l.icon && <><Icon name={l.icon} /> </>}
-              <strong>{l.title}</strong> — {l.url}{" "}
-              <button type="button" onClick={() => removeLink(i)}>Remove</button>
-            </li>
-          ))}
-        </ul>
+      {links.map((l, i) => (
+        <div key={i}>
+          <hr />
+          <p>
+            <label>
+              Title<br />
+              <input
+                type="text"
+                value={l.title}
+                onChange={(e) => updateLink(i, { title: e.target.value })}
+              />
+            </label>
+          </p>
+          <p>
+            <label>
+              URL<br />
+              <input
+                type="text"
+                value={l.url}
+                onChange={(e) => updateLink(i, { url: e.target.value })}
+              />
+            </label>
+          </p>
+          <div>
+            <label>
+              Icon<br />
+              <IconPicker value={l.icon ?? ""} onChange={(v) => updateLink(i, { icon: v || undefined })} />
+            </label>
+          </div>
+          <p>
+            <button type="button" onClick={() => removeLink(i)}>Remove</button>
+          </p>
+        </div>
+      ))}
+
+      <hr />
+
+      {showNewForm ? (
+        <>
+          <p>
+            <label>
+              Title<br />
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+              />
+            </label>
+          </p>
+          <p>
+            <label>
+              URL<br />
+              <input
+                type="text"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+              />
+            </label>
+          </p>
+          <div>
+            <label>
+              Icon<br />
+              <IconPicker value={linkIcon} onChange={setLinkIcon} />
+            </label>
+          </div>
+          <p>
+            <button
+              type="button"
+              onClick={addLink}
+              disabled={!linkTitle.trim() || !linkUrl.trim()}
+            >
+              Add link
+            </button>
+            {!linkTitle.trim() && !linkUrl.trim() && links.length > 0 && (
+              <> <button type="button" onClick={() => setShowNewForm(false)}>Remove</button></>
+            )}
+          </p>
+        </>
+      ) : (
+        <p>
+          <button type="button" onClick={() => setShowNewForm(true)}>+ Add link</button>
+        </p>
       )}
 
-      <p>
-        <label>
-          Title<br />
-          <input
-            type="text"
-            value={linkTitle}
-            onChange={(e) => setLinkTitle(e.target.value)}
-          />
-        </label>
-      </p>
-      <p>
-        <label>
-          URL<br />
-          <input
-            type="text"
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-          />
-        </label>
-      </p>
-      <div>
-        <label>
-          Icon<br />
-          <IconPicker value={linkIcon} onChange={setLinkIcon} />
-        </label>
-      </div>
-      <p>
-        <button
-          type="button"
-          onClick={addLink}
-          disabled={!linkTitle.trim() || !linkUrl.trim()}
-        >
-          Add link
-        </button>
-      </p>
-
-      <p>
+      <p style={{ marginTop: "2rem" }}>
         <button type="button" onClick={() => navigate("/signup")}>
           Create account to save →
         </button>
