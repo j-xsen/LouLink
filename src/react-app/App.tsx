@@ -13,6 +13,7 @@ import {
   Route,
   Routes,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import {
   Globe, Mail, Phone, MapPin,
@@ -1006,6 +1007,77 @@ function IndexRoute() {
 }
 
 // ---------------------------------------------------------------------------
+// Public profile page
+// ---------------------------------------------------------------------------
+
+type PublicLink = { title: string; url: string; icon?: string };
+type PublicProfile = {
+  username: string;
+  display_name: string;
+  bio: string | null;
+  category: string | null;
+  verified: boolean;
+};
+
+function ProfilePage() {
+  const { username } = useParams<{ username: string }>();
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [links, setLinks] = useState<PublicLink[]>([]);
+  const [status, setStatus] = useState<"loading" | "found" | "not-found">("loading");
+
+  useEffect(() => {
+    if (!username) { setStatus("not-found"); return; }
+    fetch(`/api/profile/${encodeURIComponent(username)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d?.profile) { setStatus("not-found"); return; }
+        setProfile(d.profile);
+        setLinks(d.links ?? []);
+        setStatus("found");
+      })
+      .catch(() => setStatus("not-found"));
+  }, [username]);
+
+  if (status === "loading") return <p>Loading…</p>;
+  if (status === "not-found" || !profile) {
+    return (
+      <>
+        <h1>Page not found</h1>
+        <p>No profile exists at this URL.</p>
+        <p><Link to="/">Go home</Link></p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h1>
+        {profile.display_name}
+        {profile.verified && " ✓"}
+      </h1>
+      {profile.bio && <p>{profile.bio}</p>}
+      {profile.category && <p><em>{profile.category}</em></p>}
+      {links.length > 0 ? (
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {links.map((l, i) => (
+            <li key={i} style={{ marginBottom: 8 }}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {l.icon && <Icon name={l.icon} />}
+                {l.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>No links yet.</p>
+      )}
+      <p><Link to="/">← LouLink</Link></p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // App root
 // ---------------------------------------------------------------------------
 
@@ -1019,6 +1091,7 @@ export default function App() {
           <Route path="/signup" element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>} />
           <Route path="/create" element={<RedirectIfHasProfile><CreatePage /></RedirectIfHasProfile>} />
           <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
+          <Route path="/:username" element={<ProfilePage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

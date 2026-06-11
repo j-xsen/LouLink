@@ -178,4 +178,27 @@ app.get("/api/username/:username/available", async (c) => {
   return c.json({ available: !row });
 });
 
+app.get("/api/profile/:username", async (c) => {
+  const username = c.req.param("username").toLowerCase();
+  if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
+
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    SELECT p.username, p.display_name, p.bio, p.category, p.verified
+    FROM public.profiles p
+    WHERE p.username = ${username}
+  `;
+  if (!profile) return c.json({ error: "Not found" }, 404);
+
+  const links = await sql`
+    SELECT title, url, icon
+    FROM public.links
+    WHERE user_id = (SELECT user_id FROM public.profiles WHERE username = ${username})
+      AND visible = true
+    ORDER BY sort_order ASC
+  `;
+
+  return c.json({ profile, links });
+});
+
 export default app;
