@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -17,6 +18,8 @@ import {
   Globe, Mail, Phone, MapPin,
   Music, Mic, Headphones, Camera,
   ShoppingBag, Coffee, Heart, Star, Rss, PiggyBank, Landmark, Handshake,
+  House, HouseHeart,
+  GripVertical,
   Link as LinkIcon,
 } from "lucide-react";
 import {
@@ -44,6 +47,7 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
   Globe, Mail, Phone, MapPin,
   Music, Mic, Headphones, Camera,
   ShoppingBag, Coffee, Heart, Star, Rss, PiggyBank, Landmark, Handshake,
+  House, HouseHeart,
   Link: LinkIcon,
   // Custom
   Emporium: NoiseEmporiumIcon,
@@ -65,9 +69,19 @@ function IconPicker({
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
 
   return (
-    <span style={{ position: "relative", display: "inline-block" }}>
+    <span ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -137,8 +151,10 @@ function IconPicker({
 
 type SessionData = { token: string; name: string };
 type ProfileData = { username: string; display_name: string };
-type DraftLink = { title: string; url: string; icon?: string };
-type Draft = { links: DraftLink[] };
+type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
+type DraftHeader = { kind: "header"; title: string };
+type DraftItem = DraftLink | DraftHeader;
+type Draft = { items: DraftItem[] };
 
 // ---------------------------------------------------------------------------
 // Auth context
@@ -247,11 +263,17 @@ function RedirectIfHasProfile({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 const DRAFT_KEY = "loulink_draft";
-const EMPTY_DRAFT: Draft = { links: [] };
+const EMPTY_DRAFT: Draft = { items: [] };
 
 function getDraft(): Draft {
   try {
-    return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") ?? EMPTY_DRAFT;
+    const raw = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null");
+    if (!raw) return EMPTY_DRAFT;
+    // Migrate old format: { links: [...] } → { items: [...] }
+    if (Array.isArray(raw.links) && !raw.items) {
+      return { items: raw.links.map((l: any) => ({ kind: "link" as const, ...l })) };
+    }
+    return raw ?? EMPTY_DRAFT;
   } catch {
     return EMPTY_DRAFT;
   }
@@ -332,15 +354,18 @@ function Home() {
 
 function CreatePage() {
   const navigate = useNavigate();
-  const [links, setLinks] = useState<DraftLink[]>(() => getDraft().links ?? []);
+  const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
   const [showNewForm, setShowNewForm] = useState(true);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragHandlePressed = useRef<number | null>(null);
 
-  function updateLinks(next: DraftLink[]) {
-    setLinks(next);
-    saveDraft({ links: next });
+  function updateItems(next: DraftItem[]) {
+    setItems(next);
+    saveDraft({ items: next });
   }
 
   function addLink() {
@@ -356,20 +381,49 @@ function CreatePage() {
     } catch {
       return;
     }
-    updateLinks([...links, { title, url, icon: linkIcon || undefined }]);
+    updateItems([...items, { kind: "link", title, url, icon: linkIcon || undefined }]);
     setLinkTitle("");
     setLinkUrl("");
     setLinkIcon("");
     setShowNewForm(false);
   }
 
-  function removeLink(i: number) {
-    updateLinks(links.filter((_, idx) => idx !== i));
+  function addHeader() {
+    updateItems([...items, { kind: "header", title: "New Section" }]);
   }
 
-  function updateLink(i: number, patch: Partial<DraftLink>) {
-    const next = links.map((l, idx) => idx === i ? { ...l, ...patch } : l);
-    updateLinks(next);
+  function removeItem(i: number) {
+    updateItems(items.filter((_, idx) => idx !== i));
+  }
+
+  function updateItem(i: number, patch: Partial<DraftItem>) {
+    const next = items.map((item, idx) => {
+      if (idx !== i) return item;
+      const merged = { ...item, ...patch } as DraftItem;
+      if (merged.kind === "header") {
+        const { title } = merged;
+        return { kind: "header", title } satisfies DraftHeader;
+      }
+      return merged;
+    });
+    updateItems(next);
+  }
+
+  function moveItem(from: number, to: number) {
+    const next = [...items];
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    updateItems(next);
+  }
+
+  function dragCardStyle(i: number) {
+    const isOver = dragOverIndex === i && dragIndex !== null && dragIndex !== i;
+    return {
+      opacity: dragIndex === i ? 0.4 : 1,
+      outline: isOver ? "2px solid #555" : "none",
+      borderRadius: 4,
+      transform: isOver ? `translateY(${dragIndex < i ? "-16px" : "16px"})` : "none",
+      transition: "transform 150ms ease",
+    };
   }
 
   return (
@@ -377,38 +431,93 @@ function CreatePage() {
       <h1>Build your page</h1>
       <p>Add your links below. You can create an account when you're ready to save.</p>
 
-      {links.map((l, i) => (
-        <div key={i}>
+      {items.map((item, i) => (
+        <div
+          key={i}
+          draggable
+          onDragStart={(e) => {
+            if (dragHandlePressed.current !== i) { e.preventDefault(); return; }
+            setDragIndex(i);
+          }}
+          onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+          onDrop={() => {
+            if (dragIndex !== null && dragIndex !== i) moveItem(dragIndex, i);
+            setDragIndex(null);
+            setDragOverIndex(null);
+          }}
+          onDragEnd={() => { dragHandlePressed.current = null; setDragIndex(null); setDragOverIndex(null); }}
+          style={{ ...dragCardStyle(i), position: "relative" }}
+        >
+          {/* Transparent overlay during drag captures events that child inputs would absorb */}
+          {dragIndex !== null && dragIndex !== i && (
+            <div style={{ position: "absolute", inset: 0, zIndex: 1 }} />
+          )}
           <hr />
-          <p>
-            <label>
-              Title<br />
-              <input
-                type="text"
-                value={l.title}
-                onChange={(e) => updateLink(i, { title: e.target.value })}
-              />
-            </label>
-          </p>
-          <p>
-            <label>
-              URL<br />
-              <input
-                type="text"
-                value={l.url}
-                onChange={(e) => updateLink(i, { url: e.target.value })}
-              />
-            </label>
-          </p>
-          <div>
-            <label>
-              Icon<br />
-              <IconPicker value={l.icon ?? ""} onChange={(v) => updateLink(i, { icon: v || undefined })} />
-            </label>
-          </div>
-          <p>
-            <button type="button" onClick={() => removeLink(i)}>Remove</button>
-          </p>
+          {item.kind === "header" ? (
+            <>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "grab", userSelect: "none" }}
+                onPointerDown={() => { dragHandlePressed.current = i; }}
+                onPointerUp={() => { dragHandlePressed.current = null; }}
+              >
+                <GripVertical size={16} />
+                <span style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.08em" }}>Section Header</span>
+              </div>
+              <p>
+                <label>
+                  Label<br />
+                  <input
+                    type="text"
+                    value={item.title}
+                    onChange={(e) => updateItem(i, { title: e.target.value })}
+                  />
+                </label>
+              </p>
+              <p>
+                <button type="button" onClick={() => removeItem(i)}>Remove</button>
+              </p>
+            </>
+          ) : (
+            <>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "grab", userSelect: "none" }}
+                onPointerDown={() => { dragHandlePressed.current = i; }}
+                onPointerUp={() => { dragHandlePressed.current = null; }}
+              >
+                <GripVertical size={16} />
+                <span style={{ fontWeight: "bold" }}>{item.title || "Untitled"}</span>
+              </div>
+              <p>
+                <label>
+                  Title<br />
+                  <input
+                    type="text"
+                    value={item.title}
+                    onChange={(e) => updateItem(i, { title: e.target.value })}
+                  />
+                </label>
+              </p>
+              <p>
+                <label>
+                  URL<br />
+                  <input
+                    type="text"
+                    value={item.url}
+                    onChange={(e) => updateItem(i, { url: e.target.value })}
+                  />
+                </label>
+              </p>
+              <div>
+                <label>
+                  Icon<br />
+                  <IconPicker value={item.icon ?? ""} onChange={(v) => updateItem(i, { icon: v || undefined })} />
+                </label>
+              </div>
+              <p>
+                <button type="button" onClick={() => removeItem(i)}>Remove</button>
+              </p>
+            </>
+          )}
         </div>
       ))}
 
@@ -450,14 +559,18 @@ function CreatePage() {
             >
               Add link
             </button>
-            {!linkTitle.trim() && !linkUrl.trim() && links.length > 0 && (
-              <> <button type="button" onClick={() => setShowNewForm(false)}>Remove</button></>
+            {!linkTitle.trim() && !linkUrl.trim() && items.length > 0 && (
+              <> <button type="button" onClick={() => setShowNewForm(false)}>Cancel</button></>
             )}
+          </p>
+          <p>
+            <button type="button" onClick={addHeader}>+ Add header</button>
           </p>
         </>
       ) : (
-        <p>
+        <p style={{ display: "flex", gap: "0.5rem" }}>
           <button type="button" onClick={() => setShowNewForm(true)}>+ Add link</button>
+          <button type="button" onClick={addHeader}>+ Add header</button>
         </p>
       )}
 
