@@ -16,8 +16,10 @@
 		"better-auth": "^1.6.15",
 		"hono": "4.11.1",
 		"jose": "^6.2.3",
+		"lucide-react": "^1.17.0",
 		"react": "19.2.1",
 		"react-dom": "19.2.1",
+		"react-icons": "^5.6.0",
 		"react-router-dom": "^7.17.0"
 	},
 	"devDependencies": {

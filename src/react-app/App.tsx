@@ -13,7 +13,114 @@ import {
   Routes,
   useNavigate,
 } from "react-router-dom";
+import {
+  Globe, Mail, Phone, MapPin,
+  Music, Mic, Headphones, Camera,
+  ShoppingBag, Coffee, Heart, Star, Rss,
+  Link as LinkIcon,
+} from "lucide-react";
+import {
+  SiYoutube, SiInstagram, SiFacebook, SiX, SiTwitch,
+  SiSpotify, SiBandcamp, SiSoundcloud,
+} from "react-icons/si";
 import { authClient } from "./auth-client";
+
+// ---------------------------------------------------------------------------
+// Icon system
+// ---------------------------------------------------------------------------
+
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  // Brand
+  YouTube: SiYoutube,
+  Instagram: SiInstagram,
+  Facebook: SiFacebook,
+  Twitter: SiX,
+  Twitch: SiTwitch,
+  Spotify: SiSpotify,
+  Bandcamp: SiBandcamp,
+  SoundCloud: SiSoundcloud,
+  // General
+  Globe, Mail, Phone, MapPin,
+  Music, Mic, Headphones, Camera,
+  ShoppingBag, Coffee, Heart, Star, Rss,
+  Link: LinkIcon,
+};
+
+const ICON_OPTIONS = Object.keys(ICON_MAP);
+
+function Icon({ name, size = 16 }: { name: string; size?: number }) {
+  const Component = ICON_MAP[name];
+  if (!Component) return null;
+  return <Component size={size} />;
+}
+
+function IconPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+      >
+        {value ? <><Icon name={value} /> {value}</> : "— None —"}
+        {" ▾"}
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 10,
+            background: "white",
+            border: "1px solid #ccc",
+            padding: 8,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 4,
+            width: 260,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            style={{ gridColumn: "1 / -1", textAlign: "left", padding: "4px 6px" }}
+          >
+            — None —
+          </button>
+          {ICON_OPTIONS.map((name) => (
+            <button
+              key={name}
+              type="button"
+              title={name}
+              onClick={() => { onChange(name); setOpen(false); }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                padding: "6px 4px",
+                fontSize: 10,
+                background: value === name ? "#eee" : "transparent",
+                border: value === name ? "1px solid #999" : "1px solid transparent",
+                cursor: "pointer",
+              }}
+            >
+              <Icon name={name} size={18} />
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +128,12 @@ import { authClient } from "./auth-client";
 
 type SessionData = { token: string; name: string };
 type ProfileData = { username: string; display_name: string };
+type DraftLink = { title: string; url: string; icon?: string };
+type Draft = { links: DraftLink[] };
+
+// ---------------------------------------------------------------------------
+// Auth context
+// ---------------------------------------------------------------------------
 
 type AuthContextType = {
   loading: boolean;
@@ -29,10 +142,6 @@ type AuthContextType = {
   loadSession: () => Promise<void>;
   signOut: () => Promise<void>;
 };
-
-// ---------------------------------------------------------------------------
-// Auth context
-// ---------------------------------------------------------------------------
 
 const AuthContext = createContext<AuthContextType>({
   loading: true,
@@ -78,9 +187,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   }, []);
 
-  useEffect(() => {
-    loadSession();
-  }, [loadSession]);
+  useEffect(() => { loadSession(); }, [loadSession]);
 
   return (
     <AuthContext.Provider value={{ loading, session, profile, loadSession, signOut }}>
@@ -98,17 +205,9 @@ function useAuth() {
 // ---------------------------------------------------------------------------
 
 function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
-  const { loading, session, profile } = useAuth();
-  if (loading) return <p>Loading…</p>;
-  if (session && profile) return <Navigate to="/" replace />;
-  if (session && !profile) return <Navigate to="/onboarding" replace />;
-  return <>{children}</>;
-}
-
-function RequireSession({ children }: { children: React.ReactNode }) {
   const { loading, session } = useAuth();
   if (loading) return <p>Loading…</p>;
-  if (!session) return <Navigate to="/signin" replace />;
+  if (session) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -116,8 +215,38 @@ function RequireProfile({ children }: { children: React.ReactNode }) {
   const { loading, session, profile } = useAuth();
   if (loading) return <p>Loading…</p>;
   if (!session) return <Navigate to="/signin" replace />;
-  if (!profile) return <Navigate to="/onboarding" replace />;
+  if (!profile) return <Navigate to="/" replace />;
   return <>{children}</>;
+}
+
+function RedirectIfHasProfile({ children }: { children: React.ReactNode }) {
+  const { loading, session, profile } = useAuth();
+  if (loading) return <p>Loading…</p>;
+  if (session && profile) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// ---------------------------------------------------------------------------
+// Draft — localStorage buffer for the page builder
+// ---------------------------------------------------------------------------
+
+const DRAFT_KEY = "loulink_draft";
+const EMPTY_DRAFT: Draft = { links: [] };
+
+function getDraft(): Draft {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") ?? EMPTY_DRAFT;
+  } catch {
+    return EMPTY_DRAFT;
+  }
+}
+
+function saveDraft(d: Partial<Draft>) {
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...getDraft(), ...d }));
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,9 +274,7 @@ function useUsernameCheck(username: string) {
     setStatus("checking");
     const id = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/username/${encodeURIComponent(username)}/available`
-        );
+        const res = await fetch(`/api/username/${encodeURIComponent(username)}/available`);
         const d = await res.json();
         setStatus(d.available ? "available" : "taken");
       } catch {
@@ -161,7 +288,7 @@ function useUsernameCheck(username: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Pages
+// Home — landing page
 // ---------------------------------------------------------------------------
 
 function Home() {
@@ -170,15 +297,128 @@ function Home() {
       <h1>LouLink</h1>
       <p>
         A free resource for Louisville artists and businesses to compile their
-        internet presences in a public repertoire of peers.
+        internet presences in a public repertoire of their peers.
       </p>
       <p>
-        <Link to="/signin">Sign in</Link> &middot;{" "}
+        <Link to="/signin">Sign in</Link>
+        {" · "}
         <Link to="/signup">Sign up</Link>
+        {" · "}
+        <Link to="/create">Create</Link>
       </p>
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Create — link builder (no account required)
+// ---------------------------------------------------------------------------
+
+function CreatePage() {
+  const navigate = useNavigate();
+  const [links, setLinks] = useState<DraftLink[]>(() => getDraft().links ?? []);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkIcon, setLinkIcon] = useState<string>("");
+
+  function updateLinks(next: DraftLink[]) {
+    setLinks(next);
+    saveDraft({ links: next });
+  }
+
+  function addLink() {
+    const title = linkTitle.trim();
+    const raw = linkUrl.trim();
+    if (!title || !raw) return;
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    let url: string;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+      url = candidate;
+    } catch {
+      return;
+    }
+    updateLinks([...links, { title, url, icon: linkIcon || undefined }]);
+    setLinkTitle("");
+    setLinkUrl("");
+    setLinkIcon("");
+  }
+
+  function removeLink(i: number) {
+    updateLinks(links.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <>
+      <h1>Build your page</h1>
+      <p>Add your links below. You can create an account when you're ready to save.</p>
+
+      {links.length > 0 && (
+        <ul>
+          {links.map((l, i) => (
+            <li key={i}>
+              {l.icon && <><Icon name={l.icon} /> </>}
+              <strong>{l.title}</strong> — {l.url}{" "}
+              <button type="button" onClick={() => removeLink(i)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p>
+        <label>
+          Title<br />
+          <input
+            type="text"
+            value={linkTitle}
+            onChange={(e) => setLinkTitle(e.target.value)}
+            placeholder="e.g. My Bandcamp"
+          />
+        </label>
+      </p>
+      <p>
+        <label>
+          URL<br />
+          <input
+            type="text"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="e.g. bandcamp.com/yourbandname"
+          />
+        </label>
+      </p>
+      <p>
+        <label>
+          Icon<br />
+          <IconPicker value={linkIcon} onChange={setLinkIcon} />
+        </label>
+      </p>
+      <p>
+        <button
+          type="button"
+          onClick={addLink}
+          disabled={!linkTitle.trim() || !linkUrl.trim()}
+        >
+          Add link
+        </button>
+      </p>
+
+      <p>
+        <button type="button" onClick={() => navigate("/signup")}>
+          Create account to save →
+        </button>
+      </p>
+      <p>
+        Already have an account? <Link to="/signin">Sign in</Link>
+      </p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Auth pages
+// ---------------------------------------------------------------------------
 
 function SignIn() {
   const { loadSession } = useAuth();
@@ -226,26 +466,74 @@ function SignUp() {
   const { loadSession } = useAuth();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const checkStatus = useUsernameCheck(username);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const usernameValid = checkStatus === "available" && !validateUsername(username);
+  const canSubmit =
+    displayName.trim().length > 0 &&
+    usernameValid &&
+    emailValid &&
+    password.length >= 8 &&
+    !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
     setError("");
-    const { error } = await authClient.signUp.email({
+
+    const { error: signUpError } = await authClient.signUp.email({
       name: displayName,
       email,
       password,
     });
-    if (error) { setError(error.message ?? "Sign up failed."); return; }
+    if (signUpError) {
+      setError(signUpError.message ?? "Sign up failed.");
+      setSubmitting(false);
+      return;
+    }
+
+    const { data } = await authClient.getSession();
+    if (!data?.session) {
+      setError("Could not establish session after sign up.");
+      setSubmitting(false);
+      return;
+    }
+
+    const draft = getDraft();
+    const res = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${data.session.token}`,
+      },
+      body: JSON.stringify({
+        username,
+        display_name: displayName.trim(),
+        links: draft.links ?? [],
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      setError(d.error ?? "Failed to create profile.");
+      setSubmitting(false);
+      return;
+    }
+
+    clearDraft();
     await loadSession();
-    navigate("/onboarding");
+    navigate("/");
   }
 
   return (
     <>
-      <h1>Sign up</h1>
+      <h1>Create your account</h1>
       <form onSubmit={handleSubmit}>
         <p>
           <label>
@@ -254,90 +542,19 @@ function SignUp() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Jaxsen Honeycutt"
               required
             />
           </label>
         </p>
         <p>
           <label>
-            Email<br />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-        </p>
-        <p>
-          <label>
-            Password<br />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-        </p>
-        {error && <p><strong>{error}</strong></p>}
-        <p><button type="submit">Sign up</button></p>
-      </form>
-      <p>
-        <Link to="/">Back</Link> &middot; <Link to="/signin">Sign in instead</Link>
-      </p>
-    </>
-  );
-}
-
-function Onboarding() {
-  const { session, loadSession } = useAuth();
-  const navigate = useNavigate();
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState(session?.name ?? "");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const checkStatus = useUsernameCheck(username);
-
-  const validationError = username ? validateUsername(username) : null;
-  const canSubmit =
-    !validationError &&
-    checkStatus === "available" &&
-    displayName.trim().length > 0 &&
-    !submitting;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit || !session) return;
-    setSubmitting(true);
-    setError("");
-    const res = await fetch("/api/onboarding", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.token}`,
-      },
-      body: JSON.stringify({ username, display_name: displayName.trim() }),
-    });
-    const d = await res.json();
-    if (!res.ok) {
-      setError(d.error ?? "Something went wrong.");
-      setSubmitting(false);
-      return;
-    }
-    await loadSession();
-    navigate("/");
-  }
-
-  return (
-    <>
-      <h1>Choose your username</h1>
-      <p>
-        Your public profile will be at{" "}
-        <strong>loul.ink/{username || "…"}</strong>
-      </p>
-      <form onSubmit={handleSubmit}>
-        <p>
-          <label>
-            Username<br />
+            Username (loul.ink/…)<br />
             <input
               type="text"
               value={username}
               onChange={(e) =>
                 setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))
               }
-              placeholder="e.g. jaxsen"
               required
             />
           </label>
@@ -347,31 +564,47 @@ function Onboarding() {
               {checkStatus === "checking" && "Checking…"}
               {checkStatus === "available" && "✓ Available"}
               {checkStatus === "taken" && "✗ Taken"}
-              {checkStatus === "invalid" && (validationError ?? "Invalid")}
+              {checkStatus === "invalid" && (validateUsername(username) ?? "Invalid")}
             </span>
           )}
         </p>
         <p>
           <label>
-            Display name<br />
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              required
-            />
+            Email<br />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </label>
+          {email && (
+            <span>
+              {" "}
+              {emailValid ? "✓ Valid" : "✗ Invalid email"}
+            </span>
+          )}
+        </p>
+        <p>
+          <label>
+            Password<br />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          {password && (
+            <span>
+              {" "}
+              {password.length >= 8 ? "✓ Good" : `✗ Too short (${password.length}/8)`}
+            </span>
+          )}
         </p>
         {error && <p><strong>{error}</strong></p>}
-        <p>
-          <button type="submit" disabled={!canSubmit}>
-            Create profile
-          </button>
-        </p>
+        <p><button type="submit" disabled={!canSubmit}>Create account</button></p>
       </form>
+      <p>
+        <Link to="/">Back</Link> &middot; <Link to="/signin">Sign in instead</Link>
+      </p>
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
 
 function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -384,28 +617,24 @@ function Dashboard() {
       <h1>Welcome, {profile.display_name}</h1>
       <p>
         Your profile:{" "}
-        <a
-          href={`https://loul.ink/${profile.username}`}
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={`https://loul.ink/${profile.username}`} target="_blank" rel="noreferrer">
           loul.ink/{profile.username}
         </a>
       </p>
       <p>
-        <Link to="/settings">Settings</Link> &middot;{" "}
-        <button
-          onClick={async () => {
-            await signOut();
-            navigate("/");
-          }}
-        >
+        <Link to="/settings">Settings</Link>
+        {" · "}
+        <button onClick={async () => { await signOut(); navigate("/"); }}>
           Sign out
         </button>
       </p>
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
 
 function Settings() {
   const { session, profile, loadSession } = useAuth();
@@ -451,9 +680,7 @@ function Settings() {
     <>
       <h1>Settings</h1>
       <h2>Change username</h2>
-      <p>
-        Current username: <strong>{profile.username}</strong>
-      </p>
+      <p>Current username: <strong>{profile.username}</strong></p>
       <form onSubmit={handleSubmit}>
         <p>
           <label>
@@ -478,32 +705,25 @@ function Settings() {
           )}
         </p>
         {error && <p><strong>{error}</strong></p>}
-        {success && (
-          <p>Username updated to <strong>{username}</strong>!</p>
-        )}
+        {success && <p>Username updated to <strong>{username}</strong>!</p>}
         <p>
-          <button type="submit" disabled={!canSubmit}>
-            Update username
-          </button>
+          <button type="submit" disabled={!canSubmit}>Update username</button>
         </p>
       </form>
-      <p>
-        <Link to="/">Back to dashboard</Link>
-      </p>
+      <p><Link to="/">Back to dashboard</Link></p>
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Index route — decides what to show at /
+// Index route
 // ---------------------------------------------------------------------------
 
 function IndexRoute() {
   const { loading, session, profile } = useAuth();
   if (loading) return <p>Loading…</p>;
-  if (!session) return <Home />;
-  if (!profile) return <Navigate to="/onboarding" replace />;
-  return <Dashboard />;
+  if (session && profile) return <Dashboard />;
+  return <Home />;
 }
 
 // ---------------------------------------------------------------------------
@@ -516,22 +736,10 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<IndexRoute />} />
-          <Route
-            path="/signin"
-            element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>}
-          />
-          <Route
-            path="/signup"
-            element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>}
-          />
-          <Route
-            path="/onboarding"
-            element={<RequireSession><Onboarding /></RequireSession>}
-          />
-          <Route
-            path="/settings"
-            element={<RequireProfile><Settings /></RequireProfile>}
-          />
+          <Route path="/signin" element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>} />
+          <Route path="/signup" element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>} />
+          <Route path="/create" element={<RedirectIfHasProfile><CreatePage /></RedirectIfHasProfile>} />
+          <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

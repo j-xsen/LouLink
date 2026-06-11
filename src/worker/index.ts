@@ -1,10 +1,61 @@
 import { Hono } from "hono";
+import { secureHeaders } from "hono/secure-headers";
 import { requireAuth } from "./auth";
 import { createDb } from "./db";
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/;
+const MAX_DISPLAY_NAME = 100;
+const MAX_LINKS = 50;
+const MAX_LINK_TITLE = 100;
+const MAX_LINK_URL = 2048;
 
 const app = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
+
+app.use("/api/*", secureHeaders());
+
+// Never leak internal error details (DB messages, stack traces) to clients.
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({ error: "Internal server error" }, 500);
+});
+
+async function readJson<T>(c: { req: { json: () => Promise<T> } }): Promise<T | null> {
+  try {
+    return await c.req.json();
+  } catch {
+    return null;
+  }
+}
+
+// Only http(s) URLs are accepted — parsing with new URL() blocks javascript:,
+// data:, and other schemes that a prefix regex alone can miss.
+function sanitizeUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_LINK_URL) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeLinks(raw: unknown): { title: string; url: string }[] | null {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) return null;
+  if (raw.length > MAX_LINKS) return null;
+  const links: { title: string; url: string }[] = [];
+  for (const l of raw) {
+    if (typeof l !== "object" || l === null) return null;
+    const title = typeof l.title === "string" ? l.title.trim() : "";
+    const url = sanitizeUrl(l.url);
+    if (!title || title.length > MAX_LINK_TITLE || !url) continue;
+    links.push({ title, url });
+  }
+  return links;
+}
 
 app.get("/api/", (c) => c.json({ name: "LouLink" }));
 
@@ -20,15 +71,29 @@ app.get("/api/me", requireAuth, async (c) => {
 
 app.post("/api/onboarding", requireAuth, async (c) => {
   const userId = c.get("userId");
-  const body = await c.req.json<{ username: string; display_name: string }>();
-  const username = body.username?.toLowerCase().trim();
-  const display_name = body.display_name?.trim();
+  const body = await readJson<{
+    username?: unknown;
+    display_name?: unknown;
+    links?: unknown;
+  }>(c);
+  if (!body || typeof body !== "object") {
+    return c.json({ error: "Invalid request body" }, 400);
+  }
 
-  if (!USERNAME_RE.test(username ?? "")) {
+  const username =
+    typeof body.username === "string" ? body.username.toLowerCase().trim() : "";
+  const display_name =
+    typeof body.display_name === "string" ? body.display_name.trim() : "";
+
+  if (!USERNAME_RE.test(username)) {
     return c.json({ error: "Invalid username" }, 400);
   }
-  if (!display_name) {
-    return c.json({ error: "Display name is required" }, 400);
+  if (!display_name || display_name.length > MAX_DISPLAY_NAME) {
+    return c.json({ error: "Display name is required (max 100 characters)" }, 400);
+  }
+  const links = sanitizeLinks(body.links);
+  if (links === null) {
+    return c.json({ error: "Invalid links" }, 400);
   }
 
   const sql = createDb(c.env.DATABASE_URL);
@@ -41,19 +106,32 @@ app.post("/api/onboarding", requireAuth, async (c) => {
       VALUES (${userId}, ${username}, ${display_name})
       RETURNING username, display_name
     `;
+
+    for (let i = 0; i < links.length; i++) {
+      await sql`
+        INSERT INTO public.links (user_id, title, url, sort_order)
+        VALUES (${userId}, ${links[i].title}, ${links[i].url}, ${i})
+      `;
+    }
+
     return c.json({ profile });
   } catch (e) {
-    if ((e as any).code === "23505") return c.json({ error: "Username taken" }, 409);
+    if ((e as { code?: string }).code === "23505") {
+      return c.json({ error: "Username taken" }, 409);
+    }
     throw e;
   }
 });
 
 app.put("/api/me/username", requireAuth, async (c) => {
   const userId = c.get("userId");
-  const body = await c.req.json<{ username: string }>();
-  const username = body.username?.toLowerCase().trim();
+  const body = await readJson<{ username?: unknown }>(c);
+  const username =
+    body && typeof body.username === "string"
+      ? body.username.toLowerCase().trim()
+      : "";
 
-  if (!USERNAME_RE.test(username ?? "")) {
+  if (!USERNAME_RE.test(username)) {
     return c.json({ error: "Invalid username" }, 400);
   }
 
@@ -67,7 +145,9 @@ app.put("/api/me/username", requireAuth, async (c) => {
     if (!profile) return c.json({ error: "Profile not found" }, 404);
     return c.json({ profile });
   } catch (e) {
-    if ((e as any).code === "23505") return c.json({ error: "Username taken" }, 409);
+    if ((e as { code?: string }).code === "23505") {
+      return c.json({ error: "Username taken" }, 409);
+    }
     throw e;
   }
 });
