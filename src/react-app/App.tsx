@@ -263,12 +263,6 @@ function RequireProfile({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function RedirectIfHasProfile({ children }: { children: React.ReactNode }) {
-  const { loading, session, profile } = useAuth();
-  if (loading) return <p>Loading…</p>;
-  if (session && profile) return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
 
 // ---------------------------------------------------------------------------
 // Draft — localStorage buffer for the page builder
@@ -374,7 +368,25 @@ function Home() {
 function CreatePage() {
   const navigate = useNavigate();
   const { session, profile, loadSession } = useAuth();
+  // New users seed from localStorage draft; existing users load from the server below
   const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
+
+  // Existing users: fetch their current links from the server and use those
+  useEffect(() => {
+    if (!profile) return;
+    fetch(`/api/profile/${encodeURIComponent(profile.username)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d?.links) return;
+        const loaded: DraftItem[] = (d.links as any[]).map((l) =>
+          l.kind === "header"
+            ? { kind: "header" as const, title: l.title }
+            : { kind: "link" as const, title: l.title, url: l.url ?? "", icon: l.icon ?? undefined }
+        );
+        setItems(loaded);
+      })
+      .catch(() => {});
+  }, [profile?.username]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [username, setUsername] = useState("");
@@ -492,8 +504,8 @@ function CreatePage() {
 
   return (
     <>
-      <h1>Build your page</h1>
-      <p>Add your links below. You can create an account when you're ready to save.</p>
+      <h1>{profile ? "Edit your links" : "Build your page"}</h1>
+      {!profile && <p>Add your links below. You can create an account when you're ready to save.</p>}
 
       {items.map((item, i) => (
         <div
@@ -913,6 +925,8 @@ function Dashboard() {
         </a>
       </p>
       <p>
+        <Link to="/create">Edit links</Link>
+        {" · "}
         <Link to="/settings">Settings</Link>
         {" · "}
         <button onClick={async () => { await signOut(); navigate("/"); }}>
@@ -1229,7 +1243,7 @@ export default function App() {
           <Route path="/" element={<IndexRoute />} />
           <Route path="/signin" element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>} />
           <Route path="/signup" element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>} />
-          <Route path="/create" element={<RedirectIfHasProfile><CreatePage /></RedirectIfHasProfile>} />
+          <Route path="/create" element={<CreatePage />} />
           <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
           <Route path="/:username" element={<ProfilePage />} />
         </Routes>
