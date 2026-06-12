@@ -56,10 +56,21 @@ const ICON_MAP: Record<string, React.ComponentType<any>> = {
 
 const ICON_OPTIONS = Object.keys(ICON_MAP);
 
-function Icon({ name, size = 16 }: { name: string; size?: number }) {
+const BRAND_COLORS: Record<string, string> = {
+  YouTube:    "#ff0000",
+  Instagram:  "#c13584",
+  Facebook:   "#1877f2",
+  Twitter:    "#1d9bf0",
+  Twitch:     "#9146ff",
+  Spotify:    "#1db954",
+  Bandcamp:   "#1da0c3",
+  SoundCloud: "#ff5500",
+};
+
+function Icon({ name, size = 16, color }: { name: string; size?: number; color?: string }) {
   const Component = ICON_MAP[name];
   if (!Component) return null;
-  return <Component size={size} />;
+  return <Component size={size} style={color ? { color } : undefined} />;
 }
 
 function IconPicker({
@@ -1010,6 +1021,24 @@ function IndexRoute() {
 // Public profile page
 // ---------------------------------------------------------------------------
 
+function useOgImages(urls: string[]) {
+  const [images, setImages] = useState<Record<string, string>>({});
+  const key = urls.join("\n");
+  useEffect(() => {
+    if (urls.length === 0) return;
+    for (const url of urls) {
+      fetch(`/api/og?url=${encodeURIComponent(url)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { ogImage: string | null } | null) => {
+          if (d?.ogImage) setImages((prev) => ({ ...prev, [url]: d.ogImage! }));
+        })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return images;
+}
+
 type PublicItem =
   | { kind: "link"; title: string; url: string; icon?: string }
   | { kind: "header"; title: string };
@@ -1051,6 +1080,21 @@ function ProfilePage() {
       .catch(() => setStatus("not-found"));
   }, [username]);
 
+  const linkUrls = items
+    .filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link")
+    .map((it) => it.url);
+  const ogImages = useOgImages(linkUrls);
+
+  // Accent color: first brand icon's color, fallback neutral
+  const accentColor = (() => {
+    for (const item of items) {
+      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) {
+        return BRAND_COLORS[item.icon];
+      }
+    }
+    return "#6b7280";
+  })();
+
   if (status === "loading") return <p>Loading…</p>;
   if (status === "not-found" || !profile) {
     return (
@@ -1071,7 +1115,7 @@ function ProfilePage() {
         <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
           {profile.display_name}
           {profile.verified && (
-            <span style={{ color: "#2563eb", fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
+            <span style={{ color: accentColor, fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
           )}
         </h1>
         {profile.bio && (
@@ -1087,8 +1131,8 @@ function ProfilePage() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
-              color: "#6b7280",
-              background: "#f3f4f6",
+              color: accentColor,
+              background: `${accentColor}18`,
               borderRadius: 20,
               padding: "3px 10px",
             }}>
@@ -1119,6 +1163,8 @@ function ProfilePage() {
                 </div>
               );
             }
+            const iconColor = item.icon ? BRAND_COLORS[item.icon] : undefined;
+            const ogImage = ogImages[item.url];
             return (
               <a
                 key={i}
@@ -1126,9 +1172,25 @@ function ProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-card"
+                style={{ "--accent": accentColor } as React.CSSProperties & { "--accent": string }}
               >
-                {item.icon && <Icon name={item.icon} size={20} />}
-                <span>{item.title}</span>
+                {item.icon && <Icon name={item.icon} size={20} color={iconColor} />}
+                <span style={{ flex: 1 }}>{item.title}</span>
+                {ogImage && (
+                  <img
+                    src={ogImage}
+                    alt=""
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 8,
+                      objectFit: "cover",
+                      flexShrink: 0,
+                      opacity: 0.92,
+                    }}
+                  />
+                )}
               </a>
             );
           })}
@@ -1141,10 +1203,11 @@ function ProfilePage() {
           to="/"
           style={{
             fontSize: "0.75rem",
-            color: "#9ca3af",
+            color: accentColor,
             textDecoration: "none",
             fontFamily: "Georgia, serif",
             letterSpacing: "0.03em",
+            opacity: 0.7,
           }}
         >
           loul.ink

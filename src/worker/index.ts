@@ -228,4 +228,52 @@ app.get("/api/profile/:username", async (c) => {
   return c.json({ profile, links });
 });
 
+// OG meta — used by the public profile page to show link preview thumbnails.
+// Fetches up to the first ~64 KB of the target page and extracts og:image.
+app.get("/api/og", async (c) => {
+  const url = sanitizeUrl(c.req.query("url") ?? "");
+  if (!url) return c.json({ ogImage: null }, 400);
+
+  let ogImage: string | null = null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "LouLink/1.0 (+https://loul.ink)" },
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const finalUrl = res.url || url; // after redirects
+      // Use an array so closure mutations aren't confused by TS narrowing
+      const found: string[] = [];
+      await new HTMLRewriter()
+        .on("meta", {
+          element(el) {
+            if (found.length > 0) return;
+            const prop = el.getAttribute("property") ?? el.getAttribute("name");
+            if (prop === "og:image" || prop === "twitter:image") {
+              const content = el.getAttribute("content");
+              if (content) found.push(content);
+            }
+          },
+        })
+        .transform(res)
+        .arrayBuffer();
+      let raw: string | null = found[0] ?? null;
+      // Resolve relative URLs against the final page origin
+      if (raw && !raw.startsWith("http")) {
+        try { raw = new URL(raw, finalUrl).href; } catch { raw = null; }
+      }
+      ogImage = raw;
+    }
+  } catch {
+    /* timeout or network error */
+  }
+
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.json({ ogImage });
+});
+
 export default app;

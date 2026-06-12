@@ -25,6 +25,6 @@ a { color: blue; }
 .link-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
-  border-color: #d1d5db;
+  border-color: var(--accent, #d1d5db);
   color: #111;
 }
