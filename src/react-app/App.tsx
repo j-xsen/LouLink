@@ -383,7 +383,7 @@ function CreatePage() {
         body: JSON.stringify({
           username,
           display_name: session.name,
-          links: items.filter((it) => it.kind === "link"),
+          links: items,
         }),
       });
       const d = await onboardRes.json();
@@ -397,7 +397,7 @@ function CreatePage() {
     const res = await fetch("/api/me/links", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ links: items.filter((it) => it.kind === "link") }),
+      body: JSON.stringify({ links: items }),
     });
     if (!res.ok) {
       const d = await res.json();
@@ -792,7 +792,7 @@ function SignUp() {
       body: JSON.stringify({
         username,
         display_name: displayName.trim(),
-        links: (draft.items ?? []).filter((it) => it.kind === "link"),
+        links: draft.items ?? [],
       }),
     });
     const d = await res.json();
@@ -1010,7 +1010,9 @@ function IndexRoute() {
 // Public profile page
 // ---------------------------------------------------------------------------
 
-type PublicLink = { title: string; url: string; icon?: string };
+type PublicItem =
+  | { kind: "link"; title: string; url: string; icon?: string }
+  | { kind: "header"; title: string };
 type PublicProfile = {
   username: string;
   display_name: string;
@@ -1019,10 +1021,18 @@ type PublicProfile = {
   verified: boolean;
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  music: "Music",
+  "visual-art": "Visual Art",
+  food: "Food & Drink",
+  retail: "Retail",
+  community: "Community",
+};
+
 function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [links, setLinks] = useState<PublicLink[]>([]);
+  const [items, setItems] = useState<PublicItem[]>([]);
   const [status, setStatus] = useState<"loading" | "found" | "not-found">("loading");
 
   useEffect(() => {
@@ -1032,7 +1042,10 @@ function ProfilePage() {
       .then((d) => {
         if (!d?.profile) { setStatus("not-found"); return; }
         setProfile(d.profile);
-        setLinks(d.links ?? []);
+        setItems((d.links ?? []).map((l: any) => l.kind === "header"
+          ? { kind: "header", title: l.title }
+          : { kind: "link", title: l.title, url: l.url, icon: l.icon ?? undefined }
+        ));
         setStatus("found");
       })
       .catch(() => setStatus("not-found"));
@@ -1049,31 +1062,95 @@ function ProfilePage() {
     );
   }
 
+  const linkItems = items.filter((it) => it.kind === "link");
+
   return (
-    <>
-      <h1>
-        {profile.display_name}
-        {profile.verified && " ✓"}
-      </h1>
-      {profile.bio && <p>{profile.bio}</p>}
-      {profile.category && <p><em>{profile.category}</em></p>}
-      {links.length > 0 ? (
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {links.map((l, i) => (
-            <li key={i} style={{ marginBottom: 8 }}>
-              <a href={l.url} target="_blank" rel="noopener noreferrer"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {l.icon && <Icon name={l.icon} />}
-                {l.title}
-              </a>
-            </li>
-          ))}
-        </ul>
+    <div style={{ paddingBottom: "4rem" }}>
+      {/* Profile header */}
+      <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
+        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
+          {profile.display_name}
+          {profile.verified && (
+            <span style={{ color: "#2563eb", fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
+          )}
+        </h1>
+        {profile.bio && (
+          <p style={{ color: "#555", margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
+            {profile.bio}
+          </p>
+        )}
+        {profile.category && (
+          <p style={{ margin: "0.5rem 0 0" }}>
+            <span style={{
+              display: "inline-block",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#6b7280",
+              background: "#f3f4f6",
+              borderRadius: 20,
+              padding: "3px 10px",
+            }}>
+              {CATEGORY_LABELS[profile.category] ?? profile.category}
+            </span>
+          </p>
+        )}
+      </div>
+
+      {/* Items */}
+      {linkItems.length === 0 ? (
+        <p style={{ textAlign: "center", color: "#9ca3af" }}>No links yet.</p>
       ) : (
-        <p>No links yet.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {items.map((item, i) => {
+            if (item.kind === "header") {
+              return (
+                <div key={i} style={{ textAlign: "center", padding: "0.75rem 0 0.25rem" }}>
+                  <span style={{
+                    fontWeight: 700,
+                    fontSize: "0.7rem",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                    color: "#9ca3af",
+                  }}>
+                    {item.title}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <a
+                key={i}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-card"
+              >
+                {item.icon && <Icon name={item.icon} size={20} />}
+                <span>{item.title}</span>
+              </a>
+            );
+          })}
+        </div>
       )}
-      <p><Link to="/">← LouLink</Link></p>
-    </>
+
+      {/* LouLink attribution */}
+      <div style={{ textAlign: "right", marginTop: "2.5rem" }}>
+        <Link
+          to="/"
+          style={{
+            fontSize: "0.75rem",
+            color: "#9ca3af",
+            textDecoration: "none",
+            fontFamily: "Georgia, serif",
+            letterSpacing: "0.03em",
+          }}
+        >
+          loul.ink
+        </Link>
+      </div>
+    </div>
   );
 }
 

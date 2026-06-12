@@ -42,19 +42,30 @@ function sanitizeUrl(raw: unknown): string | null {
   }
 }
 
-function sanitizeLinks(raw: unknown): { title: string; url: string }[] | null {
+type SanitizedItem =
+  | { kind: "link"; title: string; url: string; icon?: string }
+  | { kind: "header"; title: string };
+
+function sanitizeItems(raw: unknown): SanitizedItem[] | null {
   if (raw == null) return [];
   if (!Array.isArray(raw)) return null;
   if (raw.length > MAX_LINKS) return null;
-  const links: { title: string; url: string }[] = [];
+  const items: SanitizedItem[] = [];
   for (const l of raw) {
     if (typeof l !== "object" || l === null) return null;
+    const kind = l.kind === "header" ? "header" : "link";
     const title = typeof l.title === "string" ? l.title.trim() : "";
-    const url = sanitizeUrl(l.url);
-    if (!title || title.length > MAX_LINK_TITLE || !url) continue;
-    links.push({ title, url });
+    if (!title || title.length > MAX_LINK_TITLE) continue;
+    if (kind === "header") {
+      items.push({ kind: "header", title });
+    } else {
+      const url = sanitizeUrl(l.url);
+      if (!url) continue;
+      const icon = typeof l.icon === "string" && l.icon ? l.icon : undefined;
+      items.push({ kind: "link", title, url, ...(icon ? { icon } : {}) });
+    }
   }
-  return links;
+  return items;
 }
 
 app.get("/api/", (c) => c.json({ name: "LouLink" }));
@@ -91,8 +102,8 @@ app.post("/api/onboarding", requireAuth, async (c) => {
   if (!display_name || display_name.length > MAX_DISPLAY_NAME) {
     return c.json({ error: "Display name is required (max 100 characters)" }, 400);
   }
-  const links = sanitizeLinks(body.links);
-  if (links === null) {
+  const items = sanitizeItems(body.links);
+  if (items === null) {
     return c.json({ error: "Invalid links" }, 400);
   }
 
@@ -107,11 +118,19 @@ app.post("/api/onboarding", requireAuth, async (c) => {
       RETURNING username, display_name
     `;
 
-    for (let i = 0; i < links.length; i++) {
-      await sql`
-        INSERT INTO public.links (user_id, title, url, sort_order)
-        VALUES (${userId}, ${links[i].title}, ${links[i].url}, ${i})
-      `;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "header") {
+        await sql`
+          INSERT INTO public.links (user_id, kind, title, url, sort_order)
+          VALUES (${userId}, 'header', ${item.title}, NULL, ${i})
+        `;
+      } else {
+        await sql`
+          INSERT INTO public.links (user_id, kind, title, url, icon, sort_order)
+          VALUES (${userId}, 'link', ${item.title}, ${item.url}, ${item.icon ?? null}, ${i})
+        `;
+      }
     }
 
     return c.json({ profile });
@@ -126,16 +145,24 @@ app.post("/api/onboarding", requireAuth, async (c) => {
 app.put("/api/me/links", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ links?: unknown }>(c);
-  const links = sanitizeLinks(body?.links);
-  if (links === null) return c.json({ error: "Invalid links" }, 400);
+  const items = sanitizeItems(body?.links);
+  if (items === null) return c.json({ error: "Invalid links" }, 400);
 
   const sql = createDb(c.env.DATABASE_URL);
   await sql`DELETE FROM public.links WHERE user_id = ${userId}`;
-  for (let i = 0; i < links.length; i++) {
-    await sql`
-      INSERT INTO public.links (user_id, title, url, sort_order)
-      VALUES (${userId}, ${links[i].title}, ${links[i].url}, ${i})
-    `;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === "header") {
+      await sql`
+        INSERT INTO public.links (user_id, kind, title, url, sort_order)
+        VALUES (${userId}, 'header', ${item.title}, NULL, ${i})
+      `;
+    } else {
+      await sql`
+        INSERT INTO public.links (user_id, kind, title, url, icon, sort_order)
+        VALUES (${userId}, 'link', ${item.title}, ${item.url}, ${item.icon ?? null}, ${i})
+      `;
+    }
   }
   return c.json({ ok: true });
 });
@@ -191,7 +218,7 @@ app.get("/api/profile/:username", async (c) => {
   if (!profile) return c.json({ error: "Not found" }, 404);
 
   const links = await sql`
-    SELECT title, url, icon
+    SELECT kind, title, url, icon
     FROM public.links
     WHERE user_id = (SELECT user_id FROM public.profiles WHERE username = ${username})
       AND visible = true
