@@ -326,6 +326,21 @@ app.get("/api/og", async (c) => {
   return c.json({ ogImage });
 });
 
+app.get("/api/directory", async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const rows = await sql`
+    SELECT username, display_name, bio, category, avatar_asset_id
+    FROM public.profiles
+    WHERE verified = true
+    ORDER BY display_name
+  `;
+  const members = rows.map((p) => ({
+    ...p,
+    avatarUrl: p.avatar_asset_id ? `/avatars/${p.avatar_asset_id}` : null,
+  }));
+  return c.json(members);
+});
+
 // Unknown /api/* routes — return 404 instead of falling through to ASSETS,
 // which would crash secureHeaders() with "Can't modify immutable headers."
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));

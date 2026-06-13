@@ -364,9 +364,64 @@ function useUsernameCheck(username: string) {
 // Home — landing page
 // ---------------------------------------------------------------------------
 
+const CATEGORY_LABELS: Record<string, string> = {
+  music: "Music",
+  "visual-art": "Visual Art",
+  food: "Food & Drink",
+  retail: "Retail",
+  community: "Community",
+};
+
+type DirectoryMember = {
+  username: string;
+  display_name: string;
+  bio: string | null;
+  category: string | null;
+  avatarUrl: string | null;
+};
+
+function MemberCard({ member }: { member: DirectoryMember }) {
+  const label = member.category ? CATEGORY_LABELS[member.category] : null;
+  const bio = member.bio && member.bio.length > 100 ? member.bio.slice(0, 97) + "…" : member.bio;
+  return (
+    <Link
+      to={`/${member.username}`}
+      style={{ textDecoration: "none", color: "inherit" }}
+    >
+      <div
+        className="link-card"
+        style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem" }}
+      >
+        <AvatarImage src={member.avatarUrl} size={48} alt={member.display_name} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {member.display_name}
+          </div>
+          {label && (
+            <div style={{ fontSize: "0.75rem", opacity: 0.6 }}>{label}</div>
+          )}
+          {bio && (
+            <div style={{ fontSize: "0.85rem", marginTop: "0.2rem", opacity: 0.8 }}>{bio}</div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function Home() {
   const { session } = useAuth();
+  const [members, setMembers] = useState<DirectoryMember[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   useSeo({ title: "LouLink | Louisville Link Repertoire" });
+
+  useEffect(() => {
+    fetch("/api/directory")
+      .then((r) => r.json())
+      .then((data) => { setMembers(data as DirectoryMember[]); setStatus("ready"); })
+      .catch(() => setStatus("error"));
+  }, []);
+
   return (
     <>
       <h1>LouLink</h1>
@@ -387,6 +442,17 @@ function Home() {
         {" · "}
         <Link to="/create">Create</Link>
       </p>
+      <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
+      {status === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
+      {status === "error" && <p style={{ opacity: 0.5 }}>Could not load the directory.</p>}
+      {status === "ready" && members.length === 0 && (
+        <p style={{ opacity: 0.5 }}>No verified members yet.</p>
+      )}
+      {status === "ready" && members.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {members.map((m) => <MemberCard key={m.username} member={m} />)}
+        </div>
+      )}
     </>
   );
 }
@@ -1037,7 +1103,16 @@ function AvatarUpload({
 function Dashboard() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const [members, setMembers] = useState<DirectoryMember[]>([]);
+  const [dirStatus, setDirStatus] = useState<"loading" | "ready" | "error">("loading");
   useSeo({ title: "Dashboard | LouLink", noindex: true });
+
+  useEffect(() => {
+    fetch("/api/directory")
+      .then((r) => r.json())
+      .then((data) => { setMembers(data as DirectoryMember[]); setDirStatus("ready"); })
+      .catch(() => setDirStatus("error"));
+  }, []);
 
   if (!profile) return null;
 
@@ -1062,6 +1137,17 @@ function Dashboard() {
           Sign out
         </button>
       </p>
+      <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
+      {dirStatus === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
+      {dirStatus === "error" && <p style={{ opacity: 0.5 }}>Could not load the directory.</p>}
+      {dirStatus === "ready" && members.length === 0 && (
+        <p style={{ opacity: 0.5 }}>No verified members yet.</p>
+      )}
+      {dirStatus === "ready" && members.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {members.map((m) => <MemberCard key={m.username} member={m} />)}
+        </div>
+      )}
     </>
   );
 }
@@ -1204,13 +1290,7 @@ type PublicProfile = {
   avatarUrl: string | null;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  music: "Music",
-  "visual-art": "Visual Art",
-  food: "Food & Drink",
-  retail: "Retail",
-  community: "Community",
-};
+// moved — see definition before Home()
 
 function ProfilePage() {
   const { username } = useParams<{ username: string }>();
