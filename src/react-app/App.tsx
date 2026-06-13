@@ -217,35 +217,41 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
 
   const loadSession = useCallback(async () => {
-    const { data } = await authClient.getSession();
-    if (!data?.session) {
-      setSession(null);
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-    const jwt = await getJwt();
-    if (!jwt) {
-      setSession(null);
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-    const s: SessionData = {
-      token: jwt,
-      name: data.user.name ?? "",
-    };
-    setSession(s);
     try {
-      const res = await fetch("/api/me", {
-        headers: { Authorization: `Bearer ${s.token}` },
-      });
-      const d = await res.json();
-      setProfile(d.profile ?? null);
+      const { data } = await authClient.getSession();
+      if (!data?.session) {
+        setSession(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      const jwt = await getJwt();
+      if (!jwt) {
+        setSession(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      const s: SessionData = {
+        token: jwt,
+        name: data.user.name ?? "",
+      };
+      setSession(s);
+      try {
+        const res = await fetch("/api/me", {
+          headers: { Authorization: `Bearer ${s.token}` },
+        });
+        const d = await res.json();
+        setProfile(d.profile ?? null);
+      } catch {
+        setProfile(null);
+      }
+      setLoading(false);
     } catch {
+      setSession(null);
       setProfile(null);
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const signOut = useCallback(async () => {
