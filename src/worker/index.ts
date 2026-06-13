@@ -361,6 +361,21 @@ app.get("/api/directory", async (c) => {
   return c.json(members);
 });
 
+// TEMPORARY: purge all URLs we cached during the broken caching experiments.
+// Delete this route after hitting it once.
+app.get("/api/cache-nuke", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const urls = [
+    `${origin}/api/directory`,
+    `${origin}/api/profile/jaxsen`,
+  ];
+  const results: Record<string, boolean> = {};
+  for (const url of urls) {
+    try { results[url] = await caches.default.delete(url); } catch { results[url] = false; }
+  }
+  return c.json({ purged: results });
+});
+
 // Unknown /api/* routes — return 404 instead of falling through to ASSETS,
 // which would crash secureHeaders() with "Can't modify immutable headers."
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
