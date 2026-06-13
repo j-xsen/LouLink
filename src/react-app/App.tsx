@@ -31,6 +31,29 @@ import NoiseEmporiumIcon from "./assets/NoiseEmporiumIcon";
 import { authClient, getJwt } from "./auth-client";
 
 // ---------------------------------------------------------------------------
+// SEO
+// ---------------------------------------------------------------------------
+
+function useSeo({ title, noindex = false }: { title: string; noindex?: boolean }) {
+  useEffect(() => {
+    document.title = title;
+    const existing = document.querySelector('meta[name="robots"]');
+    if (noindex) {
+      if (existing) {
+        existing.setAttribute("content", "noindex");
+      } else {
+        const meta = document.createElement("meta");
+        meta.name = "robots";
+        meta.content = "noindex";
+        document.head.appendChild(meta);
+      }
+    } else if (existing) {
+      existing.remove();
+    }
+  }, [title, noindex]);
+}
+
+// ---------------------------------------------------------------------------
 // Icon system
 // ---------------------------------------------------------------------------
 
@@ -337,6 +360,7 @@ function useUsernameCheck(username: string) {
 
 function Home() {
   const { session } = useAuth();
+  useSeo({ title: "LouLink | Louisville Link Repertoire" });
   return (
     <>
       <h1>LouLink</h1>
@@ -368,6 +392,7 @@ function Home() {
 function CreatePage() {
   const navigate = useNavigate();
   const { session, profile, loadSession } = useAuth();
+  useSeo({ title: profile ? "Edit Links | LouLink" : "Build Your Page | LouLink", noindex: true });
   // New users seed from localStorage draft; existing users load from the server below
   const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
 
@@ -707,6 +732,7 @@ function CreatePage() {
 function SignIn() {
   const { loadSession } = useAuth();
   const navigate = useNavigate();
+  useSeo({ title: "Sign In | LouLink", noindex: true });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -749,6 +775,7 @@ function SignIn() {
 function SignUp() {
   const { session, loadSession } = useAuth();
   const navigate = useNavigate();
+  useSeo({ title: "Sign Up | LouLink", noindex: true });
   const [displayName, setDisplayName] = useState(session?.name ?? "");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -912,6 +939,7 @@ function SignUp() {
 function Dashboard() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  useSeo({ title: "Dashboard | LouLink", noindex: true });
 
   if (!profile) return null;
 
@@ -943,6 +971,7 @@ function Dashboard() {
 
 function Settings() {
   const { session, profile, loadSession } = useAuth();
+  useSeo({ title: "Settings | LouLink", noindex: true });
   const [username, setUsername] = useState(profile?.username ?? "");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -1077,6 +1106,9 @@ function ProfilePage() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [items, setItems] = useState<PublicItem[]>([]);
   const [status, setStatus] = useState<"loading" | "found" | "not-found">("loading");
+  useSeo({
+    title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
+  });
 
   useEffect(() => {
     if (!username) { setStatus("not-found"); return; }
