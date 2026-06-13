@@ -79,6 +79,10 @@ function sanitizeItems(raw: unknown): SanitizedItem[] | null {
   return items;
 }
 
+function purgeProfileCache(cache: Cache, origin: string, username: string): Promise<boolean> {
+  return cache.delete(`${origin}/api/profile/${username}`);
+}
+
 app.get("/api/", (c) => c.json({ name: "LouLink" }));
 
 app.get("/api/me", requireAuth, async (c) => {
@@ -176,6 +180,11 @@ app.put("/api/me/links", requireAuth, async (c) => {
       `;
     }
   }
+  const [row] = await sql`SELECT username FROM public.profiles WHERE user_id = ${userId}`;
+  if (row) {
+    const origin = new URL(c.req.url).origin;
+    c.executionCtx.waitUntil(purgeProfileCache(caches.default, origin, row.username as string));
+  }
   return c.json({ ok: true });
 });
 
@@ -194,6 +203,8 @@ app.put("/api/me/categories", requireAuth, async (c) => {
     RETURNING username, display_name, categories
   `;
   if (!profile) return c.json({ error: "Profile not found" }, 404);
+  const origin = new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(purgeProfileCache(caches.default, origin, profile.username as string));
   return c.json({ profile });
 });
 
@@ -210,6 +221,7 @@ app.put("/api/me/username", requireAuth, async (c) => {
   }
 
   const sql = createDb(c.env.DATABASE_URL);
+  const [old] = await sql`SELECT username FROM public.profiles WHERE user_id = ${userId}`;
   try {
     const [profile] = await sql`
       UPDATE public.profiles SET username = ${username}, updated_at = now()
@@ -217,6 +229,10 @@ app.put("/api/me/username", requireAuth, async (c) => {
       RETURNING username, display_name
     `;
     if (!profile) return c.json({ error: "Profile not found" }, 404);
+    if (old) {
+      const origin = new URL(c.req.url).origin;
+      c.executionCtx.waitUntil(purgeProfileCache(caches.default, origin, old.username as string));
+    }
     return c.json({ profile });
   } catch (e) {
     if ((e as { code?: string }).code === "23505") {
@@ -239,7 +255,7 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
     return c.json({ error: "File exceeds 5 MB limit" }, 413);
   }
   const sql = createDb(c.env.DATABASE_URL);
-  const [existing] = await sql`SELECT avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
+  const [existing] = await sql`SELECT avatar_asset_id, username FROM public.profiles WHERE user_id = ${userId}`;
   if (!existing) return c.json({ error: "Profile not found" }, 404);
   const oldKey: string | null = (existing.avatar_asset_id as string | null) ?? null;
   const ext = mimeToExt(mimeType);
@@ -249,6 +265,8 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (oldKey && oldKey !== newKey) {
     await c.env.AVATAR_BUCKET.delete(oldKey);
   }
+  const origin = new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(purgeProfileCache(caches.default, origin, existing.username as string));
   return c.json({ avatarUrl: avatarUrl(newKey) });
 });
 
@@ -264,6 +282,12 @@ app.get("/api/username/:username/available", async (c) => {
 app.get("/api/profile/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
+
+  const cache = caches.default;
+  const cacheKey = c.req.url;
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
@@ -281,7 +305,10 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
-  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
+  c.header("Cache-Control", "public, max-age=31536000");
+  const response = c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
 });
 
 app.get("/avatars/*", async (c) => {
@@ -347,6 +374,12 @@ app.get("/api/og", async (c) => {
 });
 
 app.get("/api/directory", async (c) => {
+  const cache = caches.default;
+  const cacheKey = c.req.url;
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
     SELECT username, display_name, bio, categories, avatar_asset_id
@@ -358,7 +391,11 @@ app.get("/api/directory", async (c) => {
     ...p,
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
-  return c.json(members);
+
+  c.header("Cache-Control", "public, max-age=86400");
+  const response = c.json(members);
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
 });
 
 // Unknown /api/* routes — return 404 instead of falling through to ASSETS,
