@@ -287,7 +287,7 @@ app.get("/api/profile/:username", async (c) => {
   const cacheKey = c.req.url;
 
   const cached = await cache.match(cacheKey);
-  if (cached) return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) });
+  if (cached) return c.json(await cached.json());
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
@@ -305,10 +305,15 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
+  const data = { profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links };
+  const body = JSON.stringify(data);
+  c.executionCtx.waitUntil(
+    cache.put(cacheKey, new Response(body, {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=31536000" },
+    }))
+  );
   c.header("Cache-Control", "public, max-age=31536000");
-  const response = c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
-  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
-  return response;
+  return c.json(data);
 });
 
 app.get("/avatars/*", async (c) => {
@@ -378,7 +383,7 @@ app.get("/api/directory", async (c) => {
   const cacheKey = c.req.url;
 
   const cached = await cache.match(cacheKey);
-  if (cached) return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) });
+  if (cached) return c.json(await cached.json());
 
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
@@ -392,10 +397,14 @@ app.get("/api/directory", async (c) => {
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
 
+  const body = JSON.stringify(members);
+  c.executionCtx.waitUntil(
+    cache.put(cacheKey, new Response(body, {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
+    }))
+  );
   c.header("Cache-Control", "public, max-age=86400");
-  const response = c.json(members);
-  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
-  return response;
+  return c.json(members);
 });
 
 // Unknown /api/* routes — return 404 instead of falling through to ASSETS,
