@@ -450,6 +450,62 @@ type DirectoryMember = {
   avatarUrl: string | null;
 };
 
+function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
+  const categoryOrder = Object.keys(CATEGORY_LABELS);
+
+  // Assign each member to its first matching category (in defined order)
+  const groups: Record<string, DirectoryMember[]> = {};
+  for (const cat of categoryOrder) groups[cat] = [];
+  const uncategorized: DirectoryMember[] = [];
+
+  for (const m of members) {
+    const match = categoryOrder.find((c) => m.categories.includes(c));
+    if (match) groups[match].push(m);
+    else uncategorized.push(m);
+  }
+
+  const sections = categoryOrder.filter((c) => groups[c].length > 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      {sections.map((cat) => (
+        <div key={cat}>
+          <div style={{
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            opacity: 0.45,
+            marginBottom: "0.5rem",
+          }}>
+            {CATEGORY_LABELS[cat]}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {groups[cat].map((m) => <MemberCard key={m.username} member={m} />)}
+          </div>
+        </div>
+      ))}
+      {uncategorized.length > 0 && (
+        <div>
+          <div style={{
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            opacity: 0.45,
+            marginBottom: "0.5rem",
+          }}>
+            Other
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {uncategorized.map((m) => <MemberCard key={m.username} member={m} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MemberCard({ member }: { member: DirectoryMember }) {
   const labels = member.categories.map((c) => CATEGORY_LABELS[c]).filter(Boolean);
   const bio = member.bio && member.bio.length > 100 ? member.bio.slice(0, 97) + "…" : member.bio;
@@ -523,9 +579,7 @@ function Home() {
         <p style={{ opacity: 0.5 }}>No verified members yet.</p>
       )}
       {status === "ready" && members.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {members.map((m) => <MemberCard key={m.username} member={m} />)}
-        </div>
+        <GroupedDirectory members={members} />
       )}
     </>
   );
@@ -1218,9 +1272,7 @@ function Dashboard() {
         <p style={{ opacity: 0.5 }}>No verified members yet.</p>
       )}
       {dirStatus === "ready" && members.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {members.map((m) => <MemberCard key={m.username} member={m} />)}
-        </div>
+        <GroupedDirectory members={members} />
       )}
     </>
   );
