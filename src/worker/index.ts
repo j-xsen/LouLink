@@ -85,7 +85,7 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, category, verified, avatar_asset_id
+    SELECT username, display_name, bio, categories, verified, avatar_asset_id
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
@@ -177,6 +177,24 @@ app.put("/api/me/links", requireAuth, async (c) => {
     }
   }
   return c.json({ ok: true });
+});
+
+app.put("/api/me/categories", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ categories?: unknown }>(c);
+  const VALID_CATEGORIES = new Set(["music", "visual-art", "food", "retail", "community"]);
+  const raw = body?.categories;
+  if (!Array.isArray(raw)) return c.json({ error: "categories must be an array" }, 400);
+  const categories = raw.filter((v): v is string => typeof v === "string" && VALID_CATEGORIES.has(v));
+
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET categories = ${categories}, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username, display_name, categories
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  return c.json({ profile });
 });
 
 app.put("/api/me/username", requireAuth, async (c) => {
@@ -331,7 +349,7 @@ app.get("/api/og", async (c) => {
 app.get("/api/directory", async (c) => {
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
-    SELECT username, display_name, bio, category, avatar_asset_id
+    SELECT username, display_name, bio, categories, avatar_asset_id
     FROM public.profiles
     WHERE verified = true
     ORDER BY display_name

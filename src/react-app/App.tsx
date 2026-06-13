@@ -255,7 +255,7 @@ function ShapeButton({
 // ---------------------------------------------------------------------------
 
 type SessionData = { token: string; name: string };
-type ProfileData = { username: string; display_name: string; avatarUrl: string | null };
+type ProfileData = { username: string; display_name: string; avatarUrl: string | null; categories: string[] };
 type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
 type DraftHeader = { kind: "header"; title: string };
 type DraftItem = DraftLink | DraftHeader;
@@ -446,12 +446,12 @@ type DirectoryMember = {
   username: string;
   display_name: string;
   bio: string | null;
-  category: string | null;
+  categories: string[];
   avatarUrl: string | null;
 };
 
 function MemberCard({ member }: { member: DirectoryMember }) {
-  const label = member.category ? CATEGORY_LABELS[member.category] : null;
+  const labels = member.categories.map((c) => CATEGORY_LABELS[c]).filter(Boolean);
   const bio = member.bio && member.bio.length > 100 ? member.bio.slice(0, 97) + "…" : member.bio;
   return (
     <Link
@@ -464,14 +464,18 @@ function MemberCard({ member }: { member: DirectoryMember }) {
       >
         <AvatarImage src={member.avatarUrl} size={48} alt={member.display_name} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontWeight: 600, fontSize: "1.05rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {member.display_name}
           </div>
-          {label && (
-            <div style={{ fontSize: "0.75rem", opacity: 0.6 }}>{label}</div>
+          {labels.length > 0 && (
+            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "0.15rem" }}>
+              {labels.map((label) => (
+                <span key={label} style={{ fontSize: "0.75rem", opacity: 0.6 }}>{label}</span>
+              ))}
+            </div>
           )}
           {bio && (
-            <div style={{ fontSize: "0.85rem", marginTop: "0.2rem", opacity: 0.8 }}>{bio}</div>
+            <div style={{ fontSize: "0.95rem", marginTop: "0.2rem", opacity: 0.8 }}>{bio}</div>
           )}
         </div>
       </div>
@@ -1234,6 +1238,34 @@ function Settings() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [categories, setCategories] = useState<string[]>(profile?.categories ?? []);
+  const [categoryError, setCategoryError] = useState("");
+  const [categorySuccess, setCategorySuccess] = useState(false);
+  const [categorySubmitting, setCategorySubmitting] = useState(false);
+
+  function toggleCategory(value: string) {
+    setCategories((prev) =>
+      prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
+    );
+  }
+
+  async function handleCategorySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setCategorySubmitting(true);
+    setCategoryError("");
+    setCategorySuccess(false);
+    const res = await fetch("/api/me/categories", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ categories }),
+    });
+    const d = await res.json();
+    if (!res.ok) { setCategoryError(d.error ?? "Failed to update."); setCategorySubmitting(false); return; }
+    setCategorySuccess(true);
+    setCategorySubmitting(false);
+    await loadSession();
+  }
 
   const changed = username !== profile?.username;
   const validationError = changed && username ? validateUsername(username) : null;
@@ -1279,6 +1311,24 @@ function Settings() {
           onSuccess={(url) => setAvatarUrl(url)}
         />
       )}
+      <h2>Categories</h2>
+      <form onSubmit={handleCategorySubmit}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", margin: "0.5rem 0 1rem" }}>
+          {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+            <label key={value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={categories.includes(value)}
+                onChange={() => toggleCategory(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        {categoryError && <p><strong>{categoryError}</strong></p>}
+        {categorySuccess && <p>Categories updated!</p>}
+        <p><button type="submit" disabled={categorySubmitting}>Save categories</button></p>
+      </form>
       <h2>Change username</h2>
       <p>Current username: <strong>{profile.username}</strong></p>
       <form onSubmit={handleSubmit}>
@@ -1355,7 +1405,7 @@ type PublicProfile = {
   username: string;
   display_name: string;
   bio: string | null;
-  category: string | null;
+  categories: string[];
   verified: boolean;
   avatarUrl: string | null;
 };
@@ -1435,21 +1485,23 @@ function ProfilePage() {
             {profile.bio}
           </p>
         )}
-        {profile.category && (
-          <p style={{ margin: "0.5rem 0 0" }}>
-            <span style={{
-              display: "inline-block",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: accentColor,
-              background: `${accentColor}18`,
-              borderRadius: 20,
-              padding: "3px 10px",
-            }}>
-              {CATEGORY_LABELS[profile.category] ?? profile.category}
-            </span>
+        {profile.categories.length > 0 && (
+          <p style={{ margin: "0.5rem 0 0", display: "flex", justifyContent: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+            {profile.categories.map((cat) => (
+              <span key={cat} style={{
+                display: "inline-block",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: accentColor,
+                background: `${accentColor}18`,
+                borderRadius: 20,
+                padding: "3px 10px",
+              }}>
+                {CATEGORY_LABELS[cat] ?? cat}
+              </span>
+            ))}
           </p>
         )}
       </div>
