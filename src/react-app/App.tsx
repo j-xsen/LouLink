@@ -211,7 +211,7 @@ function ShapeButton({
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "flex-start",
-    minWidth: 100,
+    minWidth: 0,
     height: 52,
     padding: "0 1rem 0 1.75rem",
     color: "#12080b",
