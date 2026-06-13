@@ -28,6 +28,10 @@ import {
   SiSpotify, SiBandcamp, SiSoundcloud,
 } from "react-icons/si";
 import NoiseEmporiumIcon from "./assets/NoiseEmporiumIcon";
+import logoFullColor from "./assets/logo-full-color.svg";
+import shape1 from "./assets/shape-1.svg";
+import shape3 from "./assets/shape-3.svg";
+import shape4 from "./assets/shape-4.svg";
 import { authClient, getJwt } from "./auth-client";
 
 // ---------------------------------------------------------------------------
@@ -178,6 +182,68 @@ function IconPicker({
       )}
     </span>
   );
+}
+
+// ---------------------------------------------------------------------------
+// ShapeButton — organic SVG blob background CTA
+// ---------------------------------------------------------------------------
+
+function ShapeButton({
+  to,
+  href,
+  onClick,
+  shape,
+  children,
+}: {
+  to?: string;
+  href?: string;
+  onClick?: () => void;
+  shape: string;
+  children: React.ReactNode;
+}) {
+  const containerStyle: React.CSSProperties = {
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 140,
+    height: 80,
+    padding: "0 1.5rem",
+    color: "#12080b",
+    fontWeight: 700,
+    textDecoration: "none",
+    cursor: "pointer",
+    border: "none",
+    background: "none",
+  };
+  const imgStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    objectPosition: "left center",
+    zIndex: 0,
+    pointerEvents: "none",
+    transform: "translateX(-5px)",
+  };
+  const labelStyle: React.CSSProperties = {
+    position: "relative",
+    zIndex: 1,
+    fontSize: "1.9rem",
+    fontFamily: "'Aladin', Georgia, serif",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  };
+  const inner = (
+    <>
+      <img src={shape} alt="" style={imgStyle} />
+      <span style={labelStyle}>{children}</span>
+    </>
+  );
+  if (to) return <Link to={to} style={containerStyle}>{inner}</Link>;
+  if (href) return <a href={href} style={containerStyle}>{inner}</a>;
+  return <button type="button" onClick={onClick} style={containerStyle}>{inner}</button>;
 }
 
 // ---------------------------------------------------------------------------
@@ -424,24 +490,28 @@ function Home() {
 
   return (
     <>
-      <h1>LouLink</h1>
-      <p>
+      <div style={{ textAlign: "center", padding: "2.5rem 0 1.5rem" }}>
+        <img
+          src={logoFullColor}
+          alt="LouLink"
+          style={{ width: "min(100%, 420px)", height: "auto" }}
+        />
+      </div>
+      <p style={{ textAlign: "center", color: "#444", lineHeight: 1.6, margin: "0 0 2rem" }}>
         A free resource for Louisville artists and businesses to compile their
         internet presences in a public repertoire of their peers.
       </p>
-      <p>
+      <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
         {session ? (
-          <Link to="/signup">Complete your profile</Link>
+          <ShapeButton to="/signup" shape={shape1}>Complete profile</ShapeButton>
         ) : (
           <>
-            <Link to="/signin">Sign in</Link>
-            {" · "}
-            <Link to="/signup">Sign up</Link>
+            <ShapeButton to="/signin" shape={shape3}>Sign in</ShapeButton>
+            <ShapeButton to="/signup" shape={shape1}>Sign up</ShapeButton>
           </>
         )}
-        {" · "}
-        <Link to="/create">Create</Link>
-      </p>
+        <ShapeButton to="/create" shape={shape4}>Create</ShapeButton>
+      </div>
       <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
       {status === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
       {status === "error" && <p style={{ opacity: 0.5 }}>Could not load the directory.</p>}
