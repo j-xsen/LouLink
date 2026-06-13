@@ -283,11 +283,12 @@ app.get("/api/profile/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
 
-  const cache = caches.default;
-  const cacheKey = c.req.url;
-
-  const cached = await cache.match(cacheKey);
-  if (cached) return c.json(await cached.json());
+  try {
+    const cached = await caches.default.match(c.req.url);
+    if (cached) return c.json(await cached.json());
+  } catch {
+    // cache unavailable, fall through to DB
+  }
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
@@ -306,13 +307,18 @@ app.get("/api/profile/:username", async (c) => {
   `;
 
   const data = { profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links };
-  const body = JSON.stringify(data);
-  c.executionCtx.waitUntil(
-    cache.put(cacheKey, new Response(body, {
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=31536000" },
-    }))
-  );
-  c.header("Cache-Control", "public, max-age=31536000");
+
+  try {
+    const body = JSON.stringify(data);
+    c.executionCtx.waitUntil(
+      caches.default.put(c.req.url, new Response(body, {
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=31536000" },
+      }))
+    );
+  } catch {
+    // cache write failed, serve response anyway
+  }
+
   return c.json(data);
 });
 
@@ -379,11 +385,12 @@ app.get("/api/og", async (c) => {
 });
 
 app.get("/api/directory", async (c) => {
-  const cache = caches.default;
-  const cacheKey = c.req.url;
-
-  const cached = await cache.match(cacheKey);
-  if (cached) return c.json(await cached.json());
+  try {
+    const cached = await caches.default.match(c.req.url);
+    if (cached) return c.json(await cached.json());
+  } catch {
+    // cache unavailable, fall through to DB
+  }
 
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
@@ -397,13 +404,17 @@ app.get("/api/directory", async (c) => {
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
 
-  const body = JSON.stringify(members);
-  c.executionCtx.waitUntil(
-    cache.put(cacheKey, new Response(body, {
-      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
-    }))
-  );
-  c.header("Cache-Control", "public, max-age=86400");
+  try {
+    const body = JSON.stringify(members);
+    c.executionCtx.waitUntil(
+      caches.default.put(c.req.url, new Response(body, {
+        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" },
+      }))
+    );
+  } catch {
+    // cache write failed, serve response anyway
+  }
+
   return c.json(members);
 });
 
