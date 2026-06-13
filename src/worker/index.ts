@@ -8,6 +8,12 @@ const MAX_DISPLAY_NAME = 100;
 const MAX_LINKS = 50;
 const MAX_LINK_TITLE = 100;
 const MAX_LINK_URL = 2048;
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+function mimeToExt(mime: string): string {
+  return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mime] ?? "bin";
+}
 
 const app = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -74,10 +80,12 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, category, verified
+    SELECT username, display_name, bio, category, verified, avatar_asset_id
     FROM public.profiles WHERE user_id = ${userId}
   `;
-  return c.json({ profile: profile ?? null });
+  if (!profile) return c.json({ profile: null });
+  const avatarUrl = profile.avatar_asset_id ? `/avatars/${profile.avatar_asset_id}` : null;
+  return c.json({ profile: { ...profile, avatarUrl } });
 });
 
 app.post("/api/onboarding", requireAuth, async (c) => {
@@ -196,6 +204,32 @@ app.put("/api/me/username", requireAuth, async (c) => {
   }
 });
 
+app.post("/api/me/avatar", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const contentType = c.req.header("content-type") ?? "";
+  const mimeType = contentType.split(";")[0].trim().toLowerCase();
+  if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+    return c.json({ error: "Unsupported image type. Use JPEG, PNG, WebP, or GIF." }, 415);
+  }
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength === 0) return c.json({ error: "Empty file" }, 400);
+  if (body.byteLength > MAX_AVATAR_BYTES) {
+    return c.json({ error: "File exceeds 5 MB limit" }, 413);
+  }
+  const sql = createDb(c.env.DATABASE_URL);
+  const [existing] = await sql`SELECT avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
+  if (!existing) return c.json({ error: "Profile not found" }, 404);
+  const oldKey: string | null = (existing.avatar_asset_id as string | null) ?? null;
+  const ext = mimeToExt(mimeType);
+  const newKey = `avatars/${userId}/${Date.now()}.${ext}`;
+  await c.env.AVATAR_BUCKET.put(newKey, body, { httpMetadata: { contentType: mimeType } });
+  await sql`UPDATE public.profiles SET avatar_asset_id = ${newKey}, updated_at = now() WHERE user_id = ${userId}`;
+  if (oldKey && oldKey !== newKey) {
+    await c.env.AVATAR_BUCKET.delete(oldKey);
+  }
+  return c.json({ avatarUrl: `/avatars/${newKey}` });
+});
+
 app.get("/api/username/:username/available", async (c) => {
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
@@ -211,11 +245,13 @@ app.get("/api/profile/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT p.username, p.display_name, p.bio, p.category, p.verified
+    SELECT p.username, p.display_name, p.bio, p.category, p.verified, p.avatar_asset_id
     FROM public.profiles p
     WHERE p.username = ${username}
   `;
   if (!profile) return c.json({ error: "Not found" }, 404);
+
+  const avatarUrl = profile.avatar_asset_id ? `/avatars/${profile.avatar_asset_id}` : null;
 
   const links = await sql`
     SELECT kind, title, url, icon
@@ -225,7 +261,21 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
-  return c.json({ profile, links });
+  return c.json({ profile: { ...profile, avatarUrl }, links });
+});
+
+app.get("/avatars/*", async (c) => {
+  const key = c.req.path.slice("/avatars/".length);
+  if (!key) return c.json({ error: "Not found" }, 404);
+  const obj = await c.env.AVATAR_BUCKET.get(key);
+  if (!obj) return c.json({ error: "Not found" }, 404);
+  const contentType = obj.httpMetadata?.contentType ?? "application/octet-stream";
+  return new Response(obj.body as ReadableStream, {
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=300, s-maxage=3600",
+    },
+  });
 });
 
 // Server-side meta injection for public profile pages.

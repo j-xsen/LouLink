@@ -185,7 +185,7 @@ function IconPicker({
 // ---------------------------------------------------------------------------
 
 type SessionData = { token: string; name: string };
-type ProfileData = { username: string; display_name: string };
+type ProfileData = { username: string; display_name: string; avatarUrl: string | null };
 type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
 type DraftHeader = { kind: "header"; title: string };
 type DraftItem = DraftLink | DraftHeader;
@@ -933,6 +933,98 @@ function SignUp() {
 }
 
 // ---------------------------------------------------------------------------
+// Avatar components
+// ---------------------------------------------------------------------------
+
+function AvatarImage({ src, size = 64, alt = "Profile picture" }: { src: string | null; size?: number; alt?: string }) {
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }}
+      onError={(e) => { e.currentTarget.style.display = "none"; }}
+    />
+  );
+}
+
+const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_AVATAR_BYTES_CLIENT = 5 * 1024 * 1024;
+
+function AvatarUpload({
+  currentAvatarUrl,
+  token,
+  onSuccess,
+}: {
+  currentAvatarUrl: string | null;
+  token: string;
+  onSuccess: (newAvatarUrl: string) => void;
+}) {
+  const [preview, setPreview] = useState<string | null>(currentAvatarUrl);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setError("");
+    if (!ALLOWED_IMAGE_TYPES_CLIENT.has(file.type)) {
+      setError("Only JPEG, PNG, WebP, or GIF images are allowed.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES_CLIENT) {
+      setError("Image must be under 5 MB.");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setUploading(true);
+    try {
+      const res = await fetch("/api/me/avatar", {
+        method: "POST",
+        headers: { "Content-Type": file.type, Authorization: `Bearer ${token}` },
+        body: file,
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error ?? "Upload failed.");
+        setPreview(currentAvatarUrl);
+        return;
+      }
+      onSuccess(d.avatarUrl);
+    } catch {
+      setError("Upload failed. Please try again.");
+      setPreview(currentAvatarUrl);
+    } finally {
+      setUploading(false);
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  return (
+    <div>
+      {preview && (
+        <div style={{ marginBottom: 8 }}>
+          <AvatarImage src={preview} size={80} alt="Profile picture preview" />
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+      />
+      <p>
+        <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}>
+          {uploading ? "Uploading…" : preview ? "Change photo" : "Upload photo"}
+        </button>
+      </p>
+      {error && <p><strong>{error}</strong></p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -945,7 +1037,10 @@ function Dashboard() {
 
   return (
     <>
-      <h1>Welcome, {profile.display_name}</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        <AvatarImage src={profile.avatarUrl} size={56} alt={profile.display_name} />
+        <h1 style={{ margin: 0 }}>Welcome, {profile.display_name}</h1>
+      </div>
       <p>
         Your profile:{" "}
         <a href={`https://loul.ink/${profile.username}`} target="_blank" rel="noreferrer">
@@ -973,6 +1068,7 @@ function Settings() {
   const { session, profile, loadSession } = useAuth();
   useSeo({ title: "Settings | LouLink", noindex: true });
   const [username, setUsername] = useState(profile?.username ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1013,6 +1109,14 @@ function Settings() {
   return (
     <>
       <h1>Settings</h1>
+      <h2>Profile picture</h2>
+      {session && (
+        <AvatarUpload
+          currentAvatarUrl={avatarUrl}
+          token={session.token}
+          onSuccess={(url) => setAvatarUrl(url)}
+        />
+      )}
       <h2>Change username</h2>
       <p>Current username: <strong>{profile.username}</strong></p>
       <form onSubmit={handleSubmit}>
@@ -1091,6 +1195,7 @@ type PublicProfile = {
   bio: string | null;
   category: string | null;
   verified: boolean;
+  avatarUrl: string | null;
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -1158,6 +1263,11 @@ function ProfilePage() {
     <div style={{ paddingBottom: "4rem" }}>
       {/* Profile header */}
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
+        {profile.avatarUrl && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+            <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} />
+          </div>
+        )}
         <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
           {profile.display_name}
           {profile.verified && (

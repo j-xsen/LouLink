@@ -3,7 +3,9 @@
 	"name": "loulink",
 	"main": "./src/worker/index.ts",
 	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"observability": {
 		"enabled": true
 	},
@@ -12,5 +14,11 @@
 		"directory": "./dist/client",
 		"binding": "ASSETS",
 		"not_found_handling": "single-page-application"
-	}
+	},
+	"r2_buckets": [
+		{
+			"binding": "AVATAR_BUCKET",
+			"bucket_name": "loulink-avatars"
+		}
+	]
 }
