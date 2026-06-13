@@ -15,16 +15,28 @@ The MVP is the minimum that makes LouLink useful to its first real users.
 - Ordered list of links (label + URL)
 - No auth required
 
-### Account Creation
-- Register with email + password
-- Choose a username (URL slug)
-- Basic profile setup: display name, bio, category
-- Photo upload to Contentful
+### Pre-auth Link Builder (`/create`)
+- Any visitor can build their link page at `/create` before creating an account
+- Draft is persisted to `localStorage` under the key `loulink_draft`
+- On save, if no session exists, user is redirected to `/signup`
+- After signup, the draft is submitted as the initial set of links
 
-### Link Management (Dashboard)
+### Account Creation (`/signup`)
+- Register with email + password (or complete profile if already signed in)
+- Choose a username (URL slug — 3–30 chars, lowercase alphanumeric with `-` and `_`)
+- Set a display name
+- Draft links from `/create` are carried through automatically
+
+### Link Management (`/create` for logged-in users)
 - Add, edit, delete links
-- Reorder links (drag or up/down buttons)
-- Toggle link visibility
+- Section headers (`kind: 'header'`) for grouping links visually
+- Reorder via drag-and-drop (grip handle)
+- Saving replaces all links in bulk (`PUT /api/me/links`) — no per-link patching
+
+### Settings (`/settings`)
+- Upload/change profile photo (stored in Cloudflare R2)
+- Select one or more categories (multi-select: `music`, `visual-art`, `food`, `retail`, `community`)
+- Change username (availability-checked live)
 
 ### Verification (Admin)
 - Admin can set `verified = true` on any user
@@ -52,8 +64,8 @@ Profile owners see a dashboard showing views over time, top referring cities, de
 **What's tracked per event:** `profile_id`, `timestamp`, `country`, `city`, `browser`, `os`, `device_type`, `referrer`. No PII, no IP address.
 
 ### Categories & Filtering
-- Filter the home page directory by category
-- Users select one primary category on signup
+- Filter the home page directory by category (not yet wired up in the UI)
+- Multi-category selection is already implemented (users can belong to multiple categories via Settings)
 
 ### Verification Self-Service
 - User submits a Louisville address or social proof

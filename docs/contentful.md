@@ -1,61 +1,69 @@
-# Contentful — Media & Content CDN
+# Media Storage — Cloudflare R2
 
-## Why Contentful
+## Current State
 
-Contentful is used as the CDN for user-uploaded media (profile photos) and any editorial/marketing content on the site. It is chosen because:
-- The Images API provides on-the-fly resizing, format conversion (WebP/AVIF), and cropping — no image processing pipeline needed in the Worker
-- Free tier covers thousands of assets, appropriate for a community app
-- Assets are served from Contentful's global CDN (`images.ctfassets.net`)
-- Content types allow structured editorial content (e.g., featured profiles, announcements) without a CMS build
+Avatar images are stored in **Cloudflare R2**, not Contentful. Contentful is no longer used for avatar storage.
 
-## What Lives in Contentful
+The R2 bucket is named `loulink-avatars` and is bound to the Worker as `AVATAR_BUCKET`.
 
-| Content Type | Purpose |
-|---|---|
-| **Profile Image** | User avatar uploads. Workers don't do multipart upload; the React app uploads directly to Contentful's Upload API and stores only the asset ID in Neon. |
-| **Announcement** (future) | Site-wide banners or news managed by admins |
-| **Featured Profile** (future) | Editorial picks for the home page hero section |
+## Avatar Upload Flow
 
-## Asset Storage Pattern
+1. User selects an image in the React app (Settings page → `AvatarUpload` component)
+2. Client validates: JPEG, PNG, WebP, or GIF only; max 5 MB
+3. React app `POST`s the raw binary to `POST /api/me/avatar` with the image's `Content-Type` header
+4. Worker validates MIME type and size again server-side
+5. Worker generates an R2 key: `avatars/<user_id>/<timestamp>.<ext>`
+6. Worker calls `c.env.AVATAR_BUCKET.put(key, body, { httpMetadata: { contentType } })`
+7. Worker updates `profiles.avatar_asset_id` to the R2 key
+8. Worker deletes the old R2 object if one existed
+9. Worker returns `{ avatarUrl: "https://loul.ink/avatars/<key>" }`
 
-Contentful asset IDs (not URLs) are stored in the Neon `users.avatar_asset_id` column. URLs are constructed at render time:
+## Avatar URL Construction
 
 ```ts
-function avatarUrl(assetId: string, width = 200): string {
-  return `https://images.ctfassets.net/${CONTENTFUL_SPACE_ID}/${assetId}/avatar.jpg?w=${width}&fm=webp&fit=thumb`;
+function avatarUrl(assetId: string | null): string | null {
+  if (!assetId) return null;
+  return `https://loul.ink/avatars/${assetId}`;
 }
 ```
 
-**Why store ID not URL:** Contentful URLs include the space ID and can be constructed from just the asset ID. Storing the URL would couple the DB to a specific CDN hostname and make format/size changes require DB updates.
+`avatar_asset_id` in the DB stores the R2 key (e.g. `avatars/uuid/1234567890.jpg`), not a full URL.
 
-## Upload Flow
+## Serving Avatars
 
-1. User selects an image in the React app
-2. React app calls `POST /api/upload-token` → Worker generates a short-lived Contentful Management API token or signed URL
-3. React app uploads directly to Contentful Upload API
-4. On success, Contentful returns an asset ID
-5. React app calls `PUT /api/users/:id` with the new `avatar_asset_id`
-6. Worker stores it in Neon
+The Worker has a `GET /avatars/*` route that proxies R2 objects:
 
-This keeps binary data off the Worker entirely.
+```ts
+app.get("/avatars/*", async (c) => {
+  const key = c.req.path.slice("/avatars/".length);
+  const obj = await c.env.AVATAR_BUCKET.get(key);
+  // returns with Cache-Control: public, max-age=300, s-maxage=3600
+});
+```
+
+## R2 Binding
+
+Declared in `wrangler.json`:
+
+```json
+"r2_buckets": [
+  {
+    "binding": "AVATAR_BUCKET",
+    "bucket_name": "loulink-avatars"
+  }
+]
+```
+
+The `Env` type picks this up automatically via `pnpm cf-typegen` (written to `worker-configuration.d.ts`). The manual `env.d.ts` file documents secrets only.
 
 ## Environment Variables
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `CONTENTFUL_SPACE_ID` | Wrangler secret | Space identifier |
-| `CONTENTFUL_DELIVERY_TOKEN` | Wrangler secret | Read-only Content Delivery API token |
-| `CONTENTFUL_MANAGEMENT_TOKEN` | Wrangler secret | Write access for uploads (keep minimal scope) |
+No Contentful secrets are currently used in the Worker. The following are defined in `src/worker/env.d.ts` as placeholders for future use but are not referenced by any active code:
 
-Store all three as Wrangler secrets. Add them to `.dev.vars` for local development (gitignored).
+| Variable | Purpose |
+|---|---|
+| `CONTENTFUL_SPACE_ID` | (future) Contentful space |
+| `CONTENTFUL_DELIVERY_TOKEN` | (future) Content Delivery API |
+| `CONTENTFUL_MANAGEMENT_TOKEN` | (future) Upload/write access |
 
-## Image Optimization Parameters
-
-Contentful Images API supports these query params, use them on every `<img>`:
-- `w=` width in pixels
-- `h=` height (optional, use with `fit=`)
-- `fm=webp` format (prefer `webp`, fallback `jpg`)
-- `fit=thumb` for avatar crops (square, centered)
-- `q=80` quality (default is fine, 80 saves bandwidth)
-
-Always request the smallest size that looks good at the display size. Don't load a 1200px image for a 48px avatar.
+If Contentful is wired up in the future (e.g. for editorial content types like announcements or featured profiles), follow the pattern in the old upload flow: store only the asset ID in Neon, construct URLs at render time.

@@ -31,23 +31,22 @@ wrangler secret put DATABASE_URL
 
 After adding the secret, run `pnpm cf-typegen` to surface it in the `Env` type. For local dev, add it to `.dev.vars` (gitignored).
 
-## Auth Table — `neon_auth.user` (read-only)
+## Auth Table — `neon_auth.users_sync` (read-only)
 
-Neon Auth (powered by Better Auth) manages this table. **Do not write to it directly.**
+Neon Auth (powered by Better Auth) manages this table. **Do not write to it directly.** The table name is `users_sync` (not `user`).
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` PRIMARY KEY | Better Auth user ID |
 | `name` | `text` | Display name |
 | `email` | `text` | User's email address |
-| `emailVerified` | `boolean` | Whether the email has been verified |
+| `email_verified` | `boolean` | Whether the email has been verified |
 | `image` | `text` | Avatar URL from OAuth provider, if any |
-| `createdAt` | `timestamptz` | |
-| `updatedAt` | `timestamptz` | |
-| `role` | `text` | |
-| `banned` | `boolean` | |
+| `created_at` | `timestamptz` | |
+| `updated_at` | `timestamptz` | |
+| `deleted_at` | `timestamptz` | Soft-delete timestamp — always filter `WHERE deleted_at IS NULL` |
 
-Better Auth also creates `neon_auth.session`, `neon_auth.account`, `neon_auth.organization`, and related tables — all managed automatically.
+Better Auth also creates session, account, and related tables in the `neon_auth` schema — all managed automatically.
 
 ## Schema
 
@@ -61,8 +60,8 @@ One row per authenticated user. Created during onboarding after first login.
 | `username` | `text` UNIQUE NOT NULL | URL slug — `loulink.com/<username>`, 3–30 chars, lowercase alphanumeric with `-` and `_` |
 | `display_name` | `text` NOT NULL | Public name shown on profile and directory |
 | `bio` | `text` | Short description, max 300 chars |
-| `avatar_asset_id` | `text` | Contentful asset ID (not a URL — resolved at render time via Contentful CDN) |
-| `category` | `profile_category` enum | `music`, `visual-art`, `food`, `retail`, `community` |
+| `avatar_asset_id` | `text` | R2 object key (e.g. `avatars/<user_id>/<timestamp>.jpg`) — resolved to a URL via `https://loul.ink/avatars/<key>` |
+| `categories` | `text[]` | Array of categories from the set: `music`, `visual-art`, `food`, `retail`, `community`. Users may belong to multiple. |
 | `verified` | `boolean` DEFAULT false | Admin-controlled Louisville verification flag |
 | `created_at` | `timestamptz` DEFAULT now() | |
 | `updated_at` | `timestamptz` DEFAULT now() | Auto-updated by trigger |
@@ -75,9 +74,10 @@ Email is not stored here — read it by joining `neon_auth.user`.
 |---|---|---|
 | `id` | `uuid` PRIMARY KEY | Default `gen_random_uuid()` |
 | `user_id` | `uuid` NOT NULL | FK → `public.profiles(user_id)` ON DELETE CASCADE |
+| `kind` | `text` NOT NULL DEFAULT `'link'` | `'link'` or `'header'` — headers are section dividers with no URL |
 | `title` | `text` NOT NULL | Display text, e.g. "My Bandcamp" |
-| `url` | `text` NOT NULL | The external URL — must start with `http://` or `https://` |
-| `icon` | `text` | Lucide React icon name, e.g. `"Instagram"`, `"Globe"`, `"Music"` |
+| `url` | `text` | External URL — required when `kind = 'link'`, NULL when `kind = 'header'` |
+| `icon` | `text` | Icon name from the app's ICON_MAP (brand icons: `Instagram`, `YouTube`, etc.; general: `Globe`, `Mail`, etc.) |
 | `sort_order` | `integer` NOT NULL DEFAULT 0 | Controls display order |
 | `visible` | `boolean` DEFAULT true | User can hide links without deleting |
 | `created_at` | `timestamptz` DEFAULT now() | |
@@ -133,25 +133,24 @@ The partial index on `profiles` makes the home page directory query (all verifie
 
 **Profile page** — join to get email:
 ```sql
-SELECT p.*, u.email, u."emailVerified"
+SELECT p.*, u.email
 FROM public.profiles p
-JOIN neon_auth.user u ON u.id = p.user_id
-WHERE p.username = $1
+JOIN neon_auth.users_sync u ON u.id = p.user_id
+WHERE p.username = $1 AND u.deleted_at IS NULL
 ```
 
-**Home page directory** — verified profiles by category:
+**Home page directory** — all verified profiles:
 ```sql
-SELECT p.*, u.name
-FROM public.profiles p
-JOIN neon_auth.user u ON u.id = p.user_id
-WHERE p.verified = true
-  AND ($1::profile_category IS NULL OR p.category = $1)
-ORDER BY p.display_name
+SELECT username, display_name, bio, categories, avatar_asset_id
+FROM public.profiles
+WHERE verified = true
+ORDER BY display_name
 ```
 
-**Profile links** — ordered for display:
+**Profile links** — ordered for display (includes headers):
 ```sql
-SELECT * FROM public.links
+SELECT kind, title, url, icon
+FROM public.links
 WHERE user_id = $1 AND visible = true
 ORDER BY sort_order ASC
 ```

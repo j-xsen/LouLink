@@ -4,7 +4,7 @@
 
 Authentication is handled by **Neon Auth**, powered by [Better Auth](https://www.better-auth.com/). It manages registration, login, OAuth providers, and session lifecycle — no custom session tables or password hashing in this app.
 
-Better Auth issues JWTs signed with **EdDSA** (Ed25519). The Worker verifies them using the JWKS URL provided by Neon Auth. The JWT is fetched from the Neon Auth `/token` endpoint (not the opaque session token returned by `getSession()`).
+Better Auth issues JWTs. The Worker verifies them using the JWKS URL provided by Neon Auth, accepting RS256/RS384/RS512, ES256/ES384/ES512, and EdDSA — but only asymmetric algorithms (HS\* and `alg:none` are rejected). The JWT is fetched from the Neon Auth `/token` endpoint via `authClient.$fetch<{ token: string }>("/token")` (not the opaque session token returned by `getSession()`).
 
 ## Environment Variables
 
@@ -15,7 +15,7 @@ Both URLs come from the Neon Console → Auth section:
 | `DATABASE_URL` | Neon Console → Connection string | Neon PostgreSQL connection |
 | `AUTH_JWKS_URL` | `https://…neonauth…/neondb/auth/.well-known/jwks.json` | Worker uses this to verify JWTs |
 
-The **Auth URL** (`https://…neonauth…/neondb/auth`) is for the **frontend** React app (Better Auth client SDK). It is not a Wrangler secret.
+The **Auth URL** (`https://…neonauth…/neondb/auth`) is for the **frontend** React app (Better Auth client SDK). It is passed as the `VITE_AUTH_URL` environment variable and read via `import.meta.env.VITE_AUTH_URL` in `src/react-app/auth-client.ts`. It is not a Wrangler secret.
 
 For local dev, put these in `.dev.vars` (gitignored). For production:
 ```bash
@@ -45,7 +45,11 @@ app.put("/api/profiles/:username", requireAuth, async (c) => {
 
 ## Onboarding Flow
 
-After first login, Better Auth has a user record but `public.profiles` does not. Protected routes that require a profile should detect this:
+After first login, Better Auth has a user record but `public.profiles` does not. The frontend detects this via `GET /api/me` returning `{ profile: null }` and keeps the user on the home page until they complete signup.
+
+Profile creation happens via `POST /api/onboarding` (auth-gated), which inserts a row into `public.profiles` and optionally inserts initial links. There is no `/onboarding` frontend route — the `SignUp` page and `CreatePage` both call this endpoint.
+
+Protected routes that require a profile should detect missing profiles:
 
 ```ts
 const [profile] = await sql`

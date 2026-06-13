@@ -49,16 +49,25 @@ src/
 All API routes live in `src/worker/index.ts`. Route pattern:
 
 ```
-GET  /api/users          → list verified Louisville users (home page data)
-GET  /api/users/:slug    → single user profile + links
-POST /api/users          → create account (auth-gated)
-PUT  /api/users/:id      → update profile (auth-gated, own user only)
-POST /api/links          → add a link (auth-gated)
-PUT  /api/links/:id      → edit a link (auth-gated)
-DELETE /api/links/:id    → remove a link (auth-gated)
+GET  /api/                            → health check
+GET  /api/me                          → current user's profile (auth-gated)
+POST /api/onboarding                  → create profile + initial links (auth-gated)
+PUT  /api/me/links                    → replace all links in bulk (auth-gated)
+PUT  /api/me/categories               → update categories array (auth-gated)
+PUT  /api/me/username                 → change username (auth-gated)
+POST /api/me/avatar                   → upload avatar to R2 (auth-gated)
+GET  /api/username/:username/available → username availability check (public)
+GET  /api/profile/:username           → public profile + links
+GET  /api/directory                   → all verified users, ordered by display_name
+GET  /api/og                          → fetch og:image from an external URL (proxy)
+GET  /avatars/*                       → serve R2 avatar objects
+GET  /:username                       → SPA with server-injected OG meta tags
+GET  *                                → static assets / SPA fallback
 ```
 
-Cloudflare bindings (KV, D1, secrets) are accessed via `c.env` inside Hono handlers. Add new bindings to `wrangler.json` first, then run `pnpm cf-typegen` to update the `Env` type.
+Note: link management is bulk-replace only (`PUT /api/me/links` deletes all existing links and re-inserts the full array). There is no per-link create/update/delete endpoint.
+
+Cloudflare bindings (secrets, R2) are accessed via `c.env` inside Hono handlers. Add new bindings to `wrangler.json` first, then run `pnpm cf-typegen` to update the `Env` type.
 
 ## TypeScript Config
 
@@ -71,14 +80,15 @@ Always run `tsc -b` (not bare `tsc`) to build all three together.
 
 ## Frontend Routing
 
-React Router (or equivalent) handles client-side navigation. Routes:
+React Router handles client-side navigation. Routes:
 
 ```
-/               → Home: Louisville directory listing
-/:username      → Public profile page
-/dashboard      → Authenticated user's link editor
-/login          → Auth flow
-/signup         → Registration + verification
+/          → IndexRoute: Home (logged-out) or Dashboard (logged-in with profile)
+/signin    → SignIn page
+/signup    → SignUp + profile creation
+/create    → CreatePage: link builder (works without an account; draft saved to localStorage)
+/settings  → Settings: avatar upload, categories, username change (RequireProfile guard)
+/:username → ProfilePage: public profile
 ```
 
 The SPA fallback in `wrangler.json` (`"not_found_handling": "single-page-application"`) ensures all unmatched routes return `index.html`, so deep links work correctly.
