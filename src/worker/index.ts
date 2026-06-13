@@ -267,7 +267,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT p.username, p.display_name, p.bio, p.category, p.verified, p.avatar_asset_id
+    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id
     FROM public.profiles p
     WHERE p.username = ${username}
   `;

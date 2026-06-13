@@ -22,6 +22,8 @@ import {
   House, HouseHeart,
   GripVertical,
   Link as LinkIcon,
+  Settings as SettingsIcon,
+  ArrowLeft,
 } from "lucide-react";
 import {
   SiYoutube, SiInstagram, SiFacebook, SiX, SiTwitch,
@@ -30,6 +32,7 @@ import {
 import NoiseEmporiumIcon from "./assets/NoiseEmporiumIcon";
 import logoFullColor from "./assets/logo-full-color.svg";
 import shape1 from "./assets/shape-1.svg";
+import shape2 from "./assets/shape-2.svg";
 import shape3 from "./assets/shape-3.svg";
 import shape4 from "./assets/shape-4.svg";
 import { authClient, getJwt } from "./auth-client";
@@ -729,7 +732,35 @@ function CreatePage() {
 
   return (
     <>
-      <h1>{profile ? "Edit your links" : "Build your page"}</h1>
+      <div style={{ display: "flex", alignItems: "center", padding: "0.5rem 0 0" }}>
+        {/* Back button with shape */}
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", height: 44, flexShrink: 0 }}>
+          <img src={shape4} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: "left center", pointerEvents: "none", transform: "translateX(-5px)" }} />
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            style={{ position: "relative", zIndex: 1, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", color: "#12080b", padding: "0 1.5rem 0 0.55rem" }}
+          >
+            <ArrowLeft size={26} />
+          </button>
+        </div>
+        {/* Centered logo */}
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+        </div>
+        {/* Balancing spacer */}
+        <div style={{ flexShrink: 0, width: 56 }} />
+      </div>
+      {/* Centered heading with shape decoration */}
+      <div style={{ textAlign: "center", marginTop: "1.75rem" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 52, minWidth: 160 }}>
+          <img src={shape2} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none", zIndex: 0 }} />
+          <span style={{ position: "relative", zIndex: 1, fontSize: "1.5rem", fontFamily: "'Aladin', Georgia, serif", paddingTop: "4px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#12080b", padding: "0 1.75rem" }}>
+            {profile ? "Edit your links" : "Build your page"}
+          </span>
+        </div>
+      </div>
       {!profile && <p>Add your links below. You can create an account when you're ready to save.</p>}
 
       {items.map((item, i) => (
@@ -1233,7 +1264,18 @@ function Dashboard() {
   const navigate = useNavigate();
   const [members, setMembers] = useState<DirectoryMember[]>([]);
   const [dirStatus, setDirStatus] = useState<"loading" | "ready" | "error">("loading");
-  useSeo({ title: "Dashboard | LouLink", noindex: true });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useSeo({ title: "LouLink | Louisville Link Repertoire" });
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [menuOpen]);
 
   useEffect(() => {
     fetch("/api/directory")
@@ -1246,25 +1288,56 @@ function Dashboard() {
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-        <AvatarImage src={profile.avatarUrl} size={56} alt={profile.display_name} />
-        <h1 style={{ margin: 0 }}>Welcome, {profile.display_name}</h1>
+      <div style={{ textAlign: "center", padding: "0.5rem 0 0" }}>
+        <img
+          src={logoFullColor}
+          alt="LouLink"
+          style={{ width: "min(55%, 220px)", height: "auto" }}
+        />
       </div>
-      <p>
-        Your profile:{" "}
-        <a href={`https://loul.ink/${profile.username}`} target="_blank" rel="noreferrer">
-          loul.ink/{profile.username}
-        </a>
-      </p>
-      <p>
-        <Link to="/create">Edit links</Link>
-        {" · "}
-        <Link to="/settings">Settings</Link>
-        {" · "}
-        <button onClick={async () => { await signOut(); navigate("/"); }}>
-          Sign out
-        </button>
-      </p>
+      <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem", alignItems: "center" }}>
+        <ShapeButton to="/create" shape={shape2} style={{ flex: 1 }}>Edit links</ShapeButton>
+        <ShapeButton to={`/${profile.username}`} shape={shape1} style={{ flex: 1 }}>My page</ShapeButton>
+        <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: 6, borderRadius: 6 }}
+            aria-label="Account menu"
+          >
+            <SettingsIcon size={22} />
+          </button>
+          {menuOpen && (
+            <div style={{
+              position: "absolute",
+              right: 0,
+              top: "calc(100% + 4px)",
+              background: "white",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
+              minWidth: 160,
+              zIndex: 100,
+              overflow: "hidden",
+            }}>
+              <Link
+                to="/settings"
+                style={{ display: "block", padding: "0.65rem 1rem", textDecoration: "none", color: "inherit", fontSize: "0.9rem" }}
+                onClick={() => setMenuOpen(false)}
+              >
+                Settings
+              </Link>
+              <button
+                type="button"
+                onClick={async () => { setMenuOpen(false); await signOut(); navigate("/"); }}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "0.65rem 1rem", background: "none", border: "none", borderTop: "1px solid #f3f4f6", cursor: "pointer", fontSize: "0.9rem", color: "inherit" }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
       {dirStatus === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
       {dirStatus === "error" && <p style={{ opacity: 0.5 }}>Could not load the directory.</p>}
