@@ -193,12 +193,14 @@ function ShapeButton({
   href,
   onClick,
   shape,
+  style,
   children,
 }: {
   to?: string;
   href?: string;
   onClick?: () => void;
   shape: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }) {
   const containerStyle: React.CSSProperties = {
@@ -206,9 +208,9 @@ function ShapeButton({
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 140,
-    height: 80,
-    padding: "0 1.5rem",
+    minWidth: 100,
+    height: 52,
+    padding: "0 1rem",
     color: "#12080b",
     fontWeight: 700,
     textDecoration: "none",
@@ -230,7 +232,7 @@ function ShapeButton({
   const labelStyle: React.CSSProperties = {
     position: "relative",
     zIndex: 1,
-    fontSize: "1.9rem",
+    fontSize: "1.25rem",
     fontFamily: "'Aladin', Georgia, serif",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
@@ -241,9 +243,10 @@ function ShapeButton({
       <span style={labelStyle}>{children}</span>
     </>
   );
-  if (to) return <Link to={to} style={containerStyle}>{inner}</Link>;
-  if (href) return <a href={href} style={containerStyle}>{inner}</a>;
-  return <button type="button" onClick={onClick} style={containerStyle}>{inner}</button>;
+  const merged = { ...containerStyle, ...style };
+  if (to) return <Link to={to} style={merged}>{inner}</Link>;
+  if (href) return <a href={href} style={merged}>{inner}</a>;
+  return <button type="button" onClick={onClick} style={merged}>{inner}</button>;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,27 +493,23 @@ function Home() {
 
   return (
     <>
-      <div style={{ textAlign: "center", padding: "2.5rem 0 1.5rem" }}>
+      <div style={{ textAlign: "center", padding: "1rem 0 0" }}>
         <img
           src={logoFullColor}
           alt="LouLink"
-          style={{ width: "min(100%, 420px)", height: "auto" }}
+          style={{ width: "min(55%, 220px)", height: "auto" }}
         />
       </div>
-      <p style={{ textAlign: "center", color: "#444", lineHeight: 1.6, margin: "0 0 2rem" }}>
-        A free resource for Louisville artists and businesses to compile their
-        internet presences in a public repertoire of their peers.
-      </p>
-      <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", gap: "0.25rem", marginTop: "1rem", marginBottom: "0.75rem" }}>
         {session ? (
-          <ShapeButton to="/signup" shape={shape1}>Complete profile</ShapeButton>
+          <ShapeButton to="/signup" shape={shape1} style={{ flex: 1 }}>Complete profile</ShapeButton>
         ) : (
           <>
-            <ShapeButton to="/signin" shape={shape3}>Sign in</ShapeButton>
-            <ShapeButton to="/signup" shape={shape1}>Sign up</ShapeButton>
+            <ShapeButton to="/signin" shape={shape3} style={{ flex: 1 }}>Sign in</ShapeButton>
+            <ShapeButton to="/signup" shape={shape1} style={{ flex: 1 }}>Sign up</ShapeButton>
           </>
         )}
-        <ShapeButton to="/create" shape={shape4}>Create</ShapeButton>
+        <ShapeButton to="/create" shape={shape4} style={{ flex: 1 }}>Create</ShapeButton>
       </div>
       <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
       {status === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
