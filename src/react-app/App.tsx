@@ -213,7 +213,7 @@ function ShapeButton({
     justifyContent: "flex-start",
     minWidth: 0,
     height: 52,
-    padding: "0 1rem 0 1.75rem",
+    padding: "0 0.5rem 0 0.75rem",
     color: "#12080b",
     fontWeight: 700,
     textDecoration: "none",
@@ -240,6 +240,7 @@ function ShapeButton({
     paddingTop: "4px",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
+    whiteSpace: "nowrap",
   };
   const inner = (
     <>
