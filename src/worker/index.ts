@@ -278,53 +278,6 @@ app.get("/avatars/*", async (c) => {
   });
 });
 
-// Server-side meta injection for public profile pages.
-// Social sharing bots (Twitter, Discord, Slack) don't execute JS, so OG tags
-// must be present in the initial HTML. We intercept /:username GET requests,
-// fetch the profile, and use HTMLRewriter to inject meta tags before serving
-// index.html. Unknown usernames still get the SPA (React handles the 404 UI).
-function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-app.get("/:username", async (c) => {
-  const username = c.req.param("username").toLowerCase();
-  const assetResp = await c.env.ASSETS.fetch(c.req.raw);
-  if (!USERNAME_RE.test(username)) return assetResp;
-
-  const sql = createDb(c.env.DATABASE_URL);
-  const [profile] = await sql`
-    SELECT display_name, bio FROM public.profiles WHERE username = ${username}
-  `;
-  if (!profile) return assetResp;
-
-  const displayName = profile.display_name as string;
-  const bio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
-  const title = `${displayName} | LouLink`;
-  const url = `https://loul.ink/${username}`;
-
-  const injected = [
-    `<title>${escHtml(title)}</title>`,
-    `<meta name="description" content="${escHtml(bio)}">`,
-    `<meta property="og:title" content="${escHtml(title)}">`,
-    `<meta property="og:description" content="${escHtml(bio)}">`,
-    `<meta property="og:url" content="${url}">`,
-    `<meta property="og:type" content="profile">`,
-    `<meta name="twitter:card" content="summary">`,
-    `<meta name="twitter:title" content="${escHtml(title)}">`,
-    `<meta name="twitter:description" content="${escHtml(bio)}">`,
-    `<link rel="canonical" href="${url}">`,
-  ].join("\n\t\t");
-
-  return new HTMLRewriter()
-    .on("title", { element(el) { el.remove(); } })
-    .on("head", { element(el) { el.prepend(injected, { html: true }); } })
-    .transform(assetResp);
-});
-
-// Catch-all: serve static assets (JS, CSS, fonts, etc.) with SPA fallback.
-app.get("*", async (c) => c.env.ASSETS.fetch(c.req.raw));
-
 // OG meta — used by the public profile page to show link preview thumbnails.
 // Fetches up to the first ~64 KB of the target page and extracts og:image.
 app.get("/api/og", async (c) => {
@@ -372,5 +325,56 @@ app.get("/api/og", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.json({ ogImage });
 });
+
+// Unknown /api/* routes — return 404 instead of falling through to ASSETS,
+// which would crash secureHeaders() with "Can't modify immutable headers."
+app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
+
+// Server-side meta injection for public profile pages.
+// Social sharing bots (Twitter, Discord, Slack) don't execute JS, so OG tags
+// must be present in the initial HTML. We intercept /:username GET requests,
+// fetch the profile, and use HTMLRewriter to inject meta tags before serving
+// index.html. Unknown usernames still get the SPA (React handles the 404 UI).
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+app.get("/:username", async (c) => {
+  const username = c.req.param("username").toLowerCase();
+  const assetResp = await c.env.ASSETS.fetch(c.req.raw);
+  if (!USERNAME_RE.test(username)) return assetResp;
+
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    SELECT display_name, bio FROM public.profiles WHERE username = ${username}
+  `;
+  if (!profile) return assetResp;
+
+  const displayName = profile.display_name as string;
+  const bio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
+  const title = `${displayName} | LouLink`;
+  const url = `https://loul.ink/${username}`;
+
+  const injected = [
+    `<title>${escHtml(title)}</title>`,
+    `<meta name="description" content="${escHtml(bio)}">`,
+    `<meta property="og:title" content="${escHtml(title)}">`,
+    `<meta property="og:description" content="${escHtml(bio)}">`,
+    `<meta property="og:url" content="${url}">`,
+    `<meta property="og:type" content="profile">`,
+    `<meta name="twitter:card" content="summary">`,
+    `<meta name="twitter:title" content="${escHtml(title)}">`,
+    `<meta name="twitter:description" content="${escHtml(bio)}">`,
+    `<link rel="canonical" href="${url}">`,
+  ].join("\n\t\t");
+
+  return new HTMLRewriter()
+    .on("title", { element(el) { el.remove(); } })
+    .on("head", { element(el) { el.prepend(injected, { html: true }); } })
+    .transform(assetResp);
+});
+
+// Catch-all: serve static assets (JS, CSS, fonts, etc.) with SPA fallback.
+app.get("*", async (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
