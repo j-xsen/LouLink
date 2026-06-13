@@ -15,6 +15,11 @@ function mimeToExt(mime: string): string {
   return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mime] ?? "bin";
 }
 
+function avatarUrl(assetId: string | null): string | null {
+  if (!assetId) return null;
+  return `https://loul.ink/avatars/${assetId}`;
+}
+
 const app = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
 app.use("/api/*", secureHeaders());
@@ -84,8 +89,7 @@ app.get("/api/me", requireAuth, async (c) => {
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
-  const avatarUrl = profile.avatar_asset_id ? `/avatars/${profile.avatar_asset_id}` : null;
-  return c.json({ profile: { ...profile, avatarUrl } });
+  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) } });
 });
 
 app.post("/api/onboarding", requireAuth, async (c) => {
@@ -227,7 +231,7 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (oldKey && oldKey !== newKey) {
     await c.env.AVATAR_BUCKET.delete(oldKey);
   }
-  return c.json({ avatarUrl: `/avatars/${newKey}` });
+  return c.json({ avatarUrl: avatarUrl(newKey) });
 });
 
 app.get("/api/username/:username/available", async (c) => {
@@ -251,8 +255,6 @@ app.get("/api/profile/:username", async (c) => {
   `;
   if (!profile) return c.json({ error: "Not found" }, 404);
 
-  const avatarUrl = profile.avatar_asset_id ? `/avatars/${profile.avatar_asset_id}` : null;
-
   const links = await sql`
     SELECT kind, title, url, icon
     FROM public.links
@@ -261,7 +263,7 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
-  return c.json({ profile: { ...profile, avatarUrl }, links });
+  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
 });
 
 app.get("/avatars/*", async (c) => {
@@ -336,7 +338,7 @@ app.get("/api/directory", async (c) => {
   `;
   const members = rows.map((p) => ({
     ...p,
-    avatarUrl: p.avatar_asset_id ? `/avatars/${p.avatar_asset_id}` : null,
+    avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
   return c.json(members);
 });
