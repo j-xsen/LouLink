@@ -232,8 +232,9 @@ function ShapeButton({
   const labelStyle: React.CSSProperties = {
     position: "relative",
     zIndex: 1,
-    fontSize: "1.25rem",
+    fontSize: "1.5rem",
     fontFamily: "'Aladin', Georgia, serif",
+    paddingTop: "4px",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   };
@@ -493,14 +494,14 @@ function Home() {
 
   return (
     <>
-      <div style={{ textAlign: "center", padding: "1rem 0 0" }}>
+      <div style={{ textAlign: "center", padding: "0.5rem 0 0" }}>
         <img
           src={logoFullColor}
           alt="LouLink"
           style={{ width: "min(55%, 220px)", height: "auto" }}
         />
       </div>
-      <div style={{ display: "flex", gap: "0.25rem", marginTop: "1rem", marginBottom: "0.75rem" }}>
+      <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem" }}>
         {session ? (
           <ShapeButton to="/signup" shape={shape1} style={{ flex: 1 }}>Complete profile</ShapeButton>
         ) : (
