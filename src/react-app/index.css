@@ -3,6 +3,11 @@ html {
   background: #fdf8f2;
 }
 
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 body {
   overflow-x: hidden;
   max-width: 600px;

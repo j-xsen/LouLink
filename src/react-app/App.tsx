@@ -649,11 +649,11 @@ function Home() {
   return (
     <>
       <div style={{ textAlign: "center", padding: "0.5rem 0 0" }}>
-        <img
+        <Link to="/"><img
           src={logoFullColor}
           alt="LouLink"
           style={{ width: "min(55%, 220px)", height: "auto" }}
-        />
+        /></Link>
       </div>
       <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem" }}>
         {session ? (
@@ -850,7 +850,7 @@ function CreatePage() {
         </div>
         {/* Centered logo */}
         <div style={{ flex: 1, textAlign: "center" }}>
-          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+          <Link to="/"><img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} /></Link>
         </div>
         {/* Balancing spacer */}
         <div style={{ flexShrink: 0, width: 56 }} />
@@ -1127,7 +1127,7 @@ function SignIn() {
           </button>
         </div>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+          <Link to="/"><img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} /></Link>
         </div>
         <div style={{ flexShrink: 0, width: 56 }} />
       </div>
@@ -1473,11 +1473,11 @@ function Dashboard() {
   return (
     <>
       <div style={{ textAlign: "center", padding: "0.5rem 0 0" }}>
-        <img
+        <Link to="/"><img
           src={logoFullColor}
           alt="LouLink"
           style={{ width: "min(55%, 220px)", height: "auto" }}
-        />
+        /></Link>
       </div>
       <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem", alignItems: "center" }}>
         <ShapeButton to="/create" shape={shape2} style={{ flex: 1 }}>Edit links</ShapeButton>
@@ -1654,7 +1654,7 @@ function Settings() {
           </button>
         </div>
         <div style={{ flex: 1, textAlign: "center" }}>
-          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+          <Link to="/"><img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} /></Link>
         </div>
         <div style={{ flexShrink: 0, width: 56 }} />
       </div>
