@@ -478,6 +478,7 @@ type DirectoryMember = {
 };
 
 function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const categoryOrder = Object.keys(CATEGORY_LABELS);
 
   // Assign each member to its first matching category (in defined order)
@@ -492,49 +493,115 @@ function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
   }
 
   const sections = categoryOrder.filter((c) => groups[c].length > 0);
+  const hasUncategorized = uncategorized.length > 0;
+
+  const pillBase: React.CSSProperties = {
+    padding: "5px 14px",
+    borderRadius: 20,
+    border: "1px solid #e5e7eb",
+    background: "transparent",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
+    fontFamily: "inherit",
+  };
+  const pillActive: React.CSSProperties = {
+    background: "#12080b",
+    borderColor: "#12080b",
+    color: "#fff",
+  };
+
+  const filteredMembers = activeFilter
+    ? members.filter((m) => m.categories.includes(activeFilter))
+    : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      {sections.map((cat) => (
-        <div key={cat}>
-          <div style={{
-            fontSize: "0.7rem",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            opacity: 0.45,
-            marginBottom: "0.5rem",
-          }}>
+      {/* Filter pills */}
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          style={{ ...pillBase, ...(activeFilter === null ? pillActive : {}) }}
+          onClick={() => setActiveFilter(null)}
+        >
+          All
+        </button>
+        {sections.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            style={{ ...pillBase, ...(activeFilter === cat ? pillActive : {}) }}
+            onClick={() => setActiveFilter(activeFilter === cat ? null : cat)}
+          >
             {CATEGORY_LABELS[cat]}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {groups[cat].map((m) => <MemberCard key={m.username} member={m} />)}
-          </div>
-        </div>
-      ))}
-      {uncategorized.length > 0 && (
-        <div>
-          <div style={{
-            fontSize: "0.7rem",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.12em",
-            opacity: 0.45,
-            marginBottom: "0.5rem",
-          }}>
+          </button>
+        ))}
+        {hasUncategorized && (
+          <button
+            type="button"
+            style={{ ...pillBase, ...(activeFilter === "__other" ? pillActive : {}) }}
+            onClick={() => setActiveFilter(activeFilter === "__other" ? null : "__other")}
+          >
             Other
-          </div>
+          </button>
+        )}
+      </div>
+
+      {/* Filtered flat list */}
+      {filteredMembers !== null ? (
+        filteredMembers.length === 0 ? (
+          <p style={{ opacity: 0.5 }}>No members in this category.</p>
+        ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {uncategorized.map((m) => <MemberCard key={m.username} member={m} />)}
+            {filteredMembers.map((m) => <MemberCard key={m.username} member={m} />)}
           </div>
-        </div>
+        )
+      ) : (
+        /* Grouped "All" view */
+        <>
+          {sections.map((cat) => (
+            <div key={cat}>
+              <div style={{
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+                opacity: 0.45,
+                marginBottom: "0.5rem",
+              }}>
+                {CATEGORY_LABELS[cat]}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {groups[cat].map((m) => <MemberCard key={m.username} member={m} />)}
+              </div>
+            </div>
+          ))}
+          {hasUncategorized && (
+            <div>
+              <div style={{
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+                opacity: 0.45,
+                marginBottom: "0.5rem",
+              }}>
+                Other
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {uncategorized.map((m) => <MemberCard key={m.username} member={m} />)}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
 function MemberCard({ member }: { member: DirectoryMember }) {
-  const labels = member.categories.map((c) => CATEGORY_LABELS[c]).filter(Boolean);
   const bio = member.bio && member.bio.length > 100 ? member.bio.slice(0, 97) + "…" : member.bio;
   return (
     <Link
@@ -550,13 +617,6 @@ function MemberCard({ member }: { member: DirectoryMember }) {
           <div style={{ fontWeight: 600, fontSize: "1.05rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {member.display_name}
           </div>
-          {labels.length > 0 && (
-            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "0.15rem" }}>
-              {labels.map((label) => (
-                <span key={label} style={{ fontSize: "0.75rem", opacity: 0.6 }}>{label}</span>
-              ))}
-            </div>
-          )}
           {bio && (
             <div style={{ fontSize: "0.95rem", marginTop: "0.2rem", opacity: 0.8 }}>{bio}</div>
           )}
