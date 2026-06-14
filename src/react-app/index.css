@@ -1,5 +1,6 @@
 html {
   overflow-x: hidden;
+  background: #fdf8f2;
 }
 
 body {
@@ -8,9 +9,52 @@ body {
   margin: 2rem auto;
   padding: 0 1rem;
   font-family: 'Raleway', sans-serif;
+  background: #fdf8f2;
 }
 
 a { color: blue; }
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+}
+
+.settings-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem 1rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  margin-bottom: 1rem;
+}
+
+.settings-card h2 {
+  margin-top: 0;
+}
+
+.settings-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: #f78f1e;
+  box-shadow: 0 0 0 2px #f78f1e33;
+}
 
 .link-card {
   display: flex;

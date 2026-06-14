@@ -198,6 +198,7 @@ function ShapeButton({
   onClick,
   shape,
   style,
+  type = "button",
   children,
 }: {
   to?: string;
@@ -205,6 +206,7 @@ function ShapeButton({
   onClick?: () => void;
   shape: string;
   style?: React.CSSProperties;
+  type?: "button" | "submit" | "reset";
   children: React.ReactNode;
 }) {
   const containerStyle: React.CSSProperties = {
@@ -252,7 +254,7 @@ function ShapeButton({
   const merged = { ...containerStyle, ...style };
   if (to) return <Link to={to} style={merged}>{inner}</Link>;
   if (href) return <a href={href} style={merged}>{inner}</a>;
-  return <button type="button" onClick={onClick} style={merged}>{inner}</button>;
+  return <button type={type} onClick={onClick} style={merged}>{inner}</button>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,15 +1260,22 @@ function SignUp() {
 // Avatar components
 // ---------------------------------------------------------------------------
 
-function AvatarImage({ src, size = 64, alt = "Profile picture" }: { src: string | null; size?: number; alt?: string }) {
+function AvatarImage({ src, size = 64, alt = "Profile picture", blobClip = false }: { src: string | null; size?: number; alt?: string; blobClip?: boolean }) {
   if (!src) return null;
+  if (blobClip) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 677.19 598.14" role="img" aria-label={alt} style={{ display: "block" }}>
+        <defs>
+          <clipPath id="avatar-blob-clip">
+            <path d="M39.5,543.53C-48.8,446.41,16,180.46,183.5,63.53c22.79-15.91,113.18-79.01,228-60,158.66,26.26,281.67,195.65,264,320-31.3,220.22-512.01,356.38-636,220Z" />
+          </clipPath>
+        </defs>
+        <image href={src} x="0" y="0" width="677.19" height="598.14" preserveAspectRatio="xMidYMid slice" clipPath="url(#avatar-blob-clip)" />
+      </svg>
+    );
+  }
   return (
-    <img
-      src={src}
-      alt={alt}
-      style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }}
-      onError={(e) => { e.currentTarget.style.display = "none"; }}
-    />
+    <img src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
   );
 }
 
@@ -1323,10 +1332,10 @@ function AvatarUpload({
   }
 
   return (
-    <div>
+    <div style={{ textAlign: "center" }}>
       {preview && (
-        <div style={{ marginBottom: 8 }}>
-          <AvatarImage src={preview} size={80} alt="Profile picture preview" />
+        <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
+          <AvatarImage src={preview} size={110} alt="Profile picture preview" blobClip />
         </div>
       )}
       <input
@@ -1450,6 +1459,7 @@ function Dashboard() {
 
 function Settings() {
   const { session, profile, loadSession } = useAuth();
+  const navigate = useNavigate();
   useSeo({ title: "Settings | LouLink", noindex: true });
   const [username, setUsername] = useState(profile?.username ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
@@ -1549,58 +1559,132 @@ function Settings() {
 
   return (
     <>
-      <h1>Settings</h1>
-      <h2>Profile picture</h2>
-      {session && (
-        <AvatarUpload
-          currentAvatarUrl={avatarUrl}
-          token={session.token}
-          onSuccess={(url) => { setAvatarUrl(url); deleteCached(`/api/profile/${profile.username}`); }}
-        />
-      )}
-      <h2>Bio</h2>
-      <form onSubmit={handleBioSubmit}>
-        <p>
+      <div style={{ display: "flex", alignItems: "center", padding: "0.5rem 0 0" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", height: 44, flexShrink: 0 }}>
+          <img src={shape4} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: "left center", pointerEvents: "none", transform: "translateX(-5px)" }} />
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            style={{ position: "relative", zIndex: 1, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", color: "#12080b", padding: "0 1.5rem 0 0.55rem" }}
+          >
+            <ArrowLeft size={26} />
+          </button>
+        </div>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+        </div>
+        <div style={{ flexShrink: 0, width: 56 }} />
+      </div>
+      <div style={{ textAlign: "center", marginTop: "1.75rem" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 52, minWidth: 160 }}>
+          <img src={shape2} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none", zIndex: 0 }} />
+          <span style={{ position: "relative", zIndex: 1, fontSize: "1.5rem", fontFamily: "'Aladin', Georgia, serif", paddingTop: "4px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#12080b", padding: "0 1.75rem" }}>
+            Settings
+          </span>
+        </div>
+      </div>
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Profile picture</h2>
+        {session && (
+          <AvatarUpload
+            currentAvatarUrl={avatarUrl}
+            token={session.token}
+            onSuccess={(url) => { setAvatarUrl(url); deleteCached(`/api/profile/${profile.username}`); }}
+          />
+        )}
+      </div>
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Bio</h2>
+        <form onSubmit={handleBioSubmit}>
           <label>
-            About you (max 300 characters)<br />
+            <span className="settings-label">About you (max 300 characters)</span>
             <textarea
               value={bio}
               onChange={(e) => { setBio(e.target.value.slice(0, 300)); setBioSuccess(false); }}
               rows={4}
               maxLength={300}
-              style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
+              style={{ resize: "vertical" }}
             />
           </label>
-          <span style={{ fontSize: "0.85rem", color: "#888" }}>{bio.length}/300</span>
-        </p>
-        {bioError && <p><strong>{bioError}</strong></p>}
-        {bioSuccess && <p>Bio updated!</p>}
-        <p><button type="submit" disabled={bioSubmitting}>Save bio</button></p>
-      </form>
-      <h2>Categories</h2>
-      <form onSubmit={handleCategorySubmit}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", margin: "0.5rem 0 1rem" }}>
-          {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-            <label key={value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={categories.includes(value)}
-                onChange={() => toggleCategory(value)}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-        {categoryError && <p><strong>{categoryError}</strong></p>}
-        {categorySuccess && <p>Categories updated!</p>}
-        <p><button type="submit" disabled={categorySubmitting}>Save categories</button></p>
-      </form>
-      <h2>Change username</h2>
-      <p>Current username: <strong>{profile.username}</strong></p>
-      <form onSubmit={handleSubmit}>
-        <p>
+          <div style={{ fontSize: "0.85rem", color: "#888", textAlign: "right", marginTop: "0.25rem" }}>{bio.length}/300</div>
+          {bioError && <p style={{ textAlign: "center" }}><strong>{bioError}</strong></p>}
+          {bioSuccess && <p style={{ textAlign: "center" }}>Bio updated!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <button type="submit" disabled={bioSubmitting} style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 80, padding: "0 2.5rem", background: "none", border: "none", cursor: bioSubmitting ? "default" : "pointer", opacity: bioSubmitting ? 0.5 : 1 }}>
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", zIndex: 0, pointerEvents: "none" }} viewBox="0 0 653.88 594.62" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="bio-btn-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#56b0e3" />
+                    <stop offset="100%" stopColor="#d88cbb" />
+                  </linearGradient>
+                </defs>
+                <path d="M574.06,83.25C417.47-66.78,62.91,5.17,8.72,147.25c-14.01,36.72-12.83,90.94,16,122.67,55.51,61.1,187.2,9.87,197.33,37.33,11.86,32.17-173.22,90.43-170.67,165.33,2.33,68.44,160.99,141.44,298.67,117.33,83.79-14.67,179.89-68.84,176-117.33-5.11-63.73-180.6-89.08-176-117.33,5.37-32.98,241.46,19.87,293.33-69.33,32.05-55.12-14.54-150.17-69.33-202.67Z" fill="url(#bio-btn-grad)" stroke="#12080b" strokeWidth="14" strokeOpacity="0.2" />
+              </svg>
+              <span style={{ position: "relative", zIndex: 1, fontFamily: "'Aladin', Georgia, serif", fontSize: "1.45rem", color: "#12080b", textTransform: "uppercase", letterSpacing: "0.05em", paddingTop: "4px" }}>Save bio</span>
+            </button>
+          </p>
+        </form>
+      </div>
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Categories</h2>
+        <form onSubmit={handleCategorySubmit}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem", justifyContent: "center", padding: "0.75rem 0 1.25rem" }}>
+            {Object.entries(CATEGORY_LABELS).map(([value, label], i) => {
+              const colors = ["#f78f1e", "#d88cbb", "#ee3666", "#56b0e3", "#d88cbb"];
+              const rotations = ["-2deg", "1.5deg", "-1.2deg", "2deg", "-1.8deg"];
+              const paddings = ["0.45rem 1.2rem", "0.5rem 1rem", "0.4rem 1.3rem", "0.5rem 1.1rem", "0.45rem 0.95rem"];
+              const selected = categories.includes(value);
+              const color = colors[i];
+              return (
+                <label key={value} style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  padding: paddings[i],
+                  borderRadius: 100,
+                  border: `2px solid ${color}`,
+                  background: selected ? color : "transparent",
+                  color: selected ? "#fff" : color,
+                  fontWeight: 700,
+                  fontSize: "1rem",
+                  letterSpacing: "0.07em",
+                  textTransform: "uppercase",
+                  transform: `rotate(${rotations[i]})`,
+                  transition: "background 150ms ease, color 150ms ease",
+                  userSelect: "none",
+                  fontFamily: "'Aladin', Georgia, serif",
+                }}>
+                  <input type="checkbox" checked={selected} onChange={() => toggleCategory(value)} style={{ display: "none" }} />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+          {categoryError && <p style={{ textAlign: "center" }}><strong>{categoryError}</strong></p>}
+          {categorySuccess && <p style={{ textAlign: "center" }}>Categories updated!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <button type="submit" disabled={categorySubmitting} style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 80, padding: "0 2.5rem", background: "none", border: "none", cursor: categorySubmitting ? "default" : "pointer", opacity: categorySubmitting ? 0.5 : 1 }}>
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", zIndex: 0, pointerEvents: "none" }} viewBox="0 0 677.19 598.14" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="cat-btn-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#f78f1e" />
+                    <stop offset="100%" stopColor="#ee3666" />
+                  </linearGradient>
+                </defs>
+                <path d="M39.5,543.53C-48.8,446.41,16,180.46,183.5,63.53c22.79-15.91,113.18-79.01,228-60,158.66,26.26,281.67,195.65,264,320-31.3,220.22-512.01,356.38-636,220Z" fill="url(#cat-btn-grad)" stroke="#12080b" strokeWidth="14" strokeOpacity="0.2" />
+              </svg>
+              <span style={{ position: "relative", zIndex: 1, fontFamily: "'Aladin', Georgia, serif", fontSize: "1.45rem", color: "#12080b", textTransform: "uppercase", letterSpacing: "0.05em", paddingTop: "4px" }}>Save categories</span>
+            </button>
+          </p>
+        </form>
+      </div>
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Change username</h2>
+        <p style={{ textAlign: "center", marginTop: 0 }}>Current: <strong>{profile.username}</strong></p>
+        <form onSubmit={handleSubmit}>
           <label>
-            New username<br />
+            <span className="settings-label">New username</span>
             <input
               type="text"
               value={username}
@@ -1611,22 +1695,31 @@ function Settings() {
             />
           </label>
           {changed && username && (
-            <span>
-              {" "}
+            <div style={{ fontSize: "0.85rem", marginTop: "0.35rem", textAlign: "center" }}>
               {checkStatus === "checking" && "Checking…"}
               {checkStatus === "available" && "✓ Available"}
               {checkStatus === "taken" && "✗ Taken"}
               {checkStatus === "invalid" && (validationError ?? "Invalid")}
-            </span>
+            </div>
           )}
-        </p>
-        {error && <p><strong>{error}</strong></p>}
-        {success && <p>Username updated to <strong>{username}</strong>!</p>}
-        <p>
-          <button type="submit" disabled={!canSubmit}>Update username</button>
-        </p>
-      </form>
-      <p><Link to="/">Back to dashboard</Link></p>
+          {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
+          {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <button type="submit" disabled={!canSubmit} style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 80, padding: "0 2.5rem", background: "none", border: "none", cursor: canSubmit ? "pointer" : "not-allowed", opacity: !canSubmit ? 0.35 : 1 }}>
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", zIndex: 0, pointerEvents: "none" }} viewBox="0 0 666.15 600.25" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="user-btn-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#f78f1e" />
+                    <stop offset="100%" stopColor="#ee3666" />
+                  </linearGradient>
+                </defs>
+                <path d="M506.75,17.88C489.21-58.25-24.48,123.82.91,279.98c24.33,149.6,982.68,474.6,555.86,234.62s-32.49-420.6-50.03-496.73Z" fill="url(#user-btn-grad)" stroke="#12080b" strokeWidth="14" strokeOpacity="0.2" />
+              </svg>
+              <span style={{ position: "relative", zIndex: 1, fontFamily: "'Aladin', Georgia, serif", fontSize: "1.45rem", color: "#12080b", textTransform: "uppercase", letterSpacing: "0.05em", paddingTop: "4px" }}>Update username</span>
+            </button>
+          </p>
+        </form>
+      </div>
     </>
   );
 }
