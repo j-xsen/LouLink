@@ -262,7 +262,7 @@ function ShapeButton({
 // ---------------------------------------------------------------------------
 
 type SessionData = { token: string; name: string };
-type ProfileData = { username: string; display_name: string; bio: string | null; avatarUrl: string | null; categories: string[] };
+type ProfileData = { username: string; display_name: string; bio: string | null; avatarUrl: string | null; categories: string[]; social_links: Record<string, string> };
 type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
 type DraftHeader = { kind: "header"; title: string };
 type DraftItem = DraftLink | DraftHeader;
@@ -690,6 +690,8 @@ function CreatePage() {
   // New users seed from localStorage draft; existing users load from the server below
   const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
 
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>(profile?.social_links ?? {});
+
   // Existing users: fetch their current links from the server and use those
   useEffect(() => {
     if (!profile) return;
@@ -703,6 +705,7 @@ function CreatePage() {
             : { kind: "link" as const, title: l.title, url: l.url ?? "", icon: l.icon ?? undefined }
         );
         setItems(loaded);
+        if (d.profile?.social_links) setSocialLinks(d.profile.social_links);
       })
       .catch(() => {});
   }, [profile?.username]);
@@ -737,11 +740,18 @@ function CreatePage() {
       return;
     }
 
-    const res = await fetch("/api/me/links", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ links: items }),
-    });
+    const [res] = await Promise.all([
+      fetch("/api/me/links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ links: items }),
+      }),
+      fetch("/api/me/social-links", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ social_links: socialLinks }),
+      }),
+    ]);
     if (!res.ok) {
       const d = await res.json();
       setSaveError(d.error ?? "Failed to save.");
@@ -854,8 +864,12 @@ function CreatePage() {
           </span>
         </div>
       </div>
+      <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
+        <button type="button" onClick={() => document.getElementById("social-links")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↓ Social links</button>
+      </div>
       {!profile && <p>Add your links below. You can create an account when you're ready to save.</p>}
 
+      <div id="link-list">
       {items.map((item, i) => (
         <div
           key={i}
@@ -945,6 +959,7 @@ function CreatePage() {
           )}
         </div>
       ))}
+      </div>
 
       <hr />
 
@@ -998,6 +1013,33 @@ function CreatePage() {
           <button type="button" onClick={addHeader}>+ Add header</button>
         </p>
       )}
+
+      <hr />
+      <div id="social-links" style={{ marginTop: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+          <p style={{ fontWeight: 700, textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.08em", color: "#9ca3af", margin: 0 }}>Social links</p>
+          <button type="button" onClick={() => document.getElementById("link-list")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↑ Links</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          {(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"] as const).map((platform) => {
+            const color = BRAND_COLORS[platform];
+            return (
+              <label key={platform} style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: `${color}18`, border: `1.5px solid ${color}`, flexShrink: 0, color }}>
+                  <Icon name={platform} size={15} color={color} />
+                </span>
+                <input
+                  type="url"
+                  placeholder={`${platform} URL`}
+                  value={socialLinks[platform] ?? ""}
+                  onChange={(e) => setSocialLinks((prev) => ({ ...prev, [platform]: e.target.value }))}
+                  style={{ flex: 1, margin: 0 }}
+                />
+              </label>
+            );
+          })}
+        </div>
+      </div>
 
       {session ? (
         <>
@@ -1767,6 +1809,7 @@ type PublicProfile = {
   categories: string[];
   verified: boolean;
   avatarUrl: string | null;
+  social_links: Record<string, string>;
 };
 
 // moved — see definition before Home()
@@ -1871,6 +1914,32 @@ function ProfilePage() {
               </span>
             ))}
           </p>
+        )}
+        {Object.keys(profile.social_links ?? {}).length > 0 && (
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+            {Object.entries(profile.social_links).map(([platform, url]) => {
+              if (!url || !BRAND_COLORS[platform]) return null;
+              const color = BRAND_COLORS[platform];
+              return (
+                <a
+                  key={platform}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={platform}
+                  style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 40, height: 40, borderRadius: "50%",
+                    background: `${color}18`, border: `1.5px solid ${color}`,
+                    color, textDecoration: "none", flexShrink: 0,
+                    transition: "background 150ms ease",
+                  }}
+                >
+                  <Icon name={platform} size={18} color={color} />
+                </a>
+              );
+            })}
+          </div>
         )}
       </div>
 

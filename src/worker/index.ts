@@ -85,7 +85,7 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, categories, verified, avatar_asset_id
+    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
@@ -211,6 +211,30 @@ app.put("/api/me/bio", requireAuth, async (c) => {
   return c.json({ profile });
 });
 
+app.put("/api/me/social-links", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ social_links?: unknown }>(c);
+  const SOCIAL_PLATFORMS = new Set(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"]);
+  const raw = body?.social_links;
+  const filtered: Record<string, string> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [key, val] of Object.entries(raw)) {
+      if (SOCIAL_PLATFORMS.has(key) && typeof val === "string") {
+        const trimmed = val.trim().slice(0, 500);
+        if (trimmed) filtered[key] = trimmed;
+      }
+    }
+  }
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET social_links = ${JSON.stringify(filtered)}::jsonb, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username, display_name, social_links
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  return c.json({ profile });
+});
+
 app.put("/api/me/username", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ username?: unknown }>(c);
@@ -281,7 +305,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id
+    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id, p.social_links
     FROM public.profiles p
     WHERE p.username = ${username}
   `;
