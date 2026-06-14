@@ -14,13 +14,35 @@ The entire application runs on Cloudflare's edge network. There is no traditiona
 
 ```
 src/
-  react-app/       # React 19 SPA (compiled by Vite)
-    main.tsx       # Entry point
-    App.tsx        # Root component
+  react-app/              # React 19 SPA (compiled by Vite)
+    main.tsx              # Entry point
+    App.tsx               # Router only — routes + ScrollToTop + IndexRoute
+    auth.tsx              # AuthContext, AuthProvider, useAuth, route guards
+    types.ts              # Shared TypeScript types + CATEGORY_LABELS constant
     index.css
     App.css
+    auth-client.ts        # Better Auth client SDK initialization
+    lib/
+      cache.ts            # In-memory API response cache (getCached/setCached/deleteCached)
+      draft.ts            # localStorage link-builder draft (getDraft/saveDraft/clearDraft)
+      seo.ts              # useSeo hook (document.title + noindex meta)
+      username.ts         # validateUsername + useUsernameCheck (debounced availability check)
+    components/
+      icons.tsx           # ICON_MAP, BRAND_COLORS, Icon, IconPicker
+      ui.tsx              # ShapeButton, PageHeader, ShapeTitle, BlobButton (shared shape-based UI)
+      Avatar.tsx          # AvatarImage, AvatarUpload
+      Directory.tsx       # MemberCard, GroupedDirectory (home/dashboard member list)
+    pages/
+      Home.tsx            # Public landing page + directory (logged-out)
+      Dashboard.tsx       # Authenticated home (logged-in with profile)
+      CreatePage.tsx      # Link builder — works without an account; draft saved to localStorage
+      SignIn.tsx          # Sign in form
+      SignUp.tsx          # Account creation + onboarding (calls POST /api/onboarding)
+      Settings.tsx        # Avatar, bio, categories, username change
+      ProfilePage.tsx     # Public /:username profile page
+    assets/               # SVG logos, shape blobs, brand icons
   worker/
-    index.ts       # Hono API — the Worker entry point
+    index.ts              # Hono API — the Worker entry point
 ```
 
 ## Two Compilation Targets
