@@ -439,13 +439,15 @@ app.get("/:username", async (c) => {
   if (!profile) return assetResp;
 
   const displayName = profile.display_name as string;
-  const bio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
+  const rawBio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
+  const bio = rawBio.length > 125 ? rawBio.slice(0, 122) + "…" : rawBio;
   const title = `${displayName} | LouLink`;
   const url = `https://loul.ink/${username}`;
 
   const injected = [
     `<title>${escHtml(title)}</title>`,
     `<meta name="description" content="${escHtml(bio)}">`,
+    `<meta property="og:site_name" content="LouLink">`,
     `<meta property="og:title" content="${escHtml(title)}">`,
     `<meta property="og:description" content="${escHtml(bio)}">`,
     `<meta property="og:url" content="${url}">`,
