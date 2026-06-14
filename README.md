@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/j-xsen/loulink/main/src/react-app/assets/logo-full-color.svg" alt="LouLink" width="480" />
+  <img src="./src/react-app/assets/logo-full-color.svg" alt="LouLink" width="480" />
 </p>
 
 <p align="center">
