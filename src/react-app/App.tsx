@@ -498,8 +498,11 @@ function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
   const pillBase: React.CSSProperties = {
     padding: "5px 14px",
     borderRadius: 20,
-    border: "1px solid #e5e7eb",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "#e5e7eb",
     background: "transparent",
+    color: "inherit",
     fontSize: "0.78rem",
     fontWeight: 600,
     cursor: "pointer",
