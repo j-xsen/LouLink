@@ -12,6 +12,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -1753,10 +1754,17 @@ function ProfilePage() {
 // App root
 // ---------------------------------------------------------------------------
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<IndexRoute />} />
           <Route path="/signin" element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>} />
