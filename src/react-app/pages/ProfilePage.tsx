@@ -23,22 +23,13 @@ type PublicProfile = {
   social_links: Record<string, string>;
 };
 
-function useOgImages(urls: string[]) {
-  const [images, setImages] = useState<Record<string, string>>({});
-  const key = urls.join("\n");
-  useEffect(() => {
-    if (urls.length === 0) return;
-    for (const url of urls) {
-      fetch(`/api/og?url=${encodeURIComponent(url)}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { ogImage: string | null } | null) => {
-          if (d?.ogImage) setImages((prev) => ({ ...prev, [url]: d.ogImage! }));
-        })
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return images;
+function getFaviconUrl(url: string): string {
+  try {
+    const { hostname } = new URL(url);
+    return `https://icons.duckduckgo.com/ip3/${hostname}.ico`;
+  } catch {
+    return "";
+  }
 }
 
 export default function ProfilePage() {
@@ -74,11 +65,6 @@ export default function ProfilePage() {
       })
       .catch(() => setStatus("not-found"));
   }, [username]);
-
-  const linkUrls = items
-    .filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link")
-    .map((it) => it.url);
-  const ogImages = useOgImages(linkUrls);
 
   // Accent color: first brand icon's color, fallback neutral
   const accentColor = (() => {
@@ -192,7 +178,7 @@ export default function ProfilePage() {
               );
             }
             const iconColor = item.icon ? BRAND_COLORS[item.icon] : undefined;
-            const ogImage = ogImages[item.url];
+            const faviconUrl = getFaviconUrl(item.url);
             return (
               <a
                 key={i}
@@ -204,19 +190,12 @@ export default function ProfilePage() {
               >
                 {item.icon && <Icon name={item.icon} size={20} color={iconColor} />}
                 <span style={{ flex: 1 }}>{item.title}</span>
-                {ogImage && (
+                {faviconUrl && (
                   <img
-                    src={ogImage}
+                    src={faviconUrl}
                     alt=""
                     onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 8,
-                      objectFit: "cover",
-                      flexShrink: 0,
-                      opacity: 0.92,
-                    }}
+                    style={{ width: 20, height: 20, flexShrink: 0, opacity: 0.6 }}
                   />
                 )}
               </a>

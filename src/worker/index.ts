@@ -450,9 +450,11 @@ app.get("/:username", async (c) => {
     `<meta property="og:description" content="${escHtml(bio)}">`,
     `<meta property="og:url" content="${url}">`,
     `<meta property="og:type" content="profile">`,
-    `<meta name="twitter:card" content="summary">`,
+    `<meta property="og:image" content="https://loul.ink/og-image.jpg">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escHtml(title)}">`,
     `<meta name="twitter:description" content="${escHtml(bio)}">`,
+    `<meta name="twitter:image" content="https://loul.ink/og-image.jpg">`,
     `<link rel="canonical" href="${url}">`,
   ].join("\n\t\t");
 
