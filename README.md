@@ -1,90 +1,90 @@
-# React + Vite + Hono + Cloudflare Workers
+<p align="center">
+  <img src="https://raw.githubusercontent.com/j-xsen/loulink/main/src/react-app/assets/logo-full-color.svg" alt="LouLink" width="480" />
+</p>
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/vite-react-template)
+<p align="center">
+  A Louisville-only link-in-bio platform and public directory for local artists, businesses, and creators.
+</p>
 
-This template provides a minimal setup for building a React application with TypeScript and Vite, designed to run on Cloudflare Workers. It features hot module replacement, ESLint integration, and the flexibility of Workers deployments.
+<p align="center">
+  <a href="https://github.com/j-xsen/loulink">GitHub</a> · <a href="https://loulink.com">loulink.com</a>
+</p>
 
-![React + TypeScript + Vite + Cloudflare Workers](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/fc7b4b62-442b-4769-641b-ad4422d74300/public)
+---
 
-<!-- dash-content-start -->
+## What It Is
 
-🚀 Supercharge your web development with this powerful stack:
+LouLink gives Louisville artists and businesses a single shareable URL that aggregates all their online presences — Instagram, Bandcamp, Etsy, website, and more — into one public profile page at `loulink.com/<username>`.
 
-- [**React**](https://react.dev/) - A modern UI library for building interactive interfaces
-- [**Vite**](https://vite.dev/) - Lightning-fast build tooling and development server
-- [**Hono**](https://hono.dev/) - Ultralight, modern backend framework
-- [**Cloudflare Workers**](https://developers.cloudflare.com/workers/) - Edge computing platform for global deployment
+Unlike Linktree, LouLink is **Louisville-only**. Every user must be verified as Louisville-based, and the home page is a browsable directory of the entire local creative and business community.
 
-### ✨ Key Features
+## Stack
 
-- 🔥 Hot Module Replacement (HMR) for rapid development
-- 📦 TypeScript support out of the box
-- 🛠️ ESLint configuration included
-- ⚡ Zero-config deployment to Cloudflare's global network
-- 🎯 API routes with Hono's elegant routing
-- 🔄 Full-stack development setup
-- 🔎 Built-in Observability to monitor your Worker
-
-Get started in minutes with local development or deploy directly via the Cloudflare dashboard. Perfect for building modern, performant web applications at the edge.
-
-<!-- dash-content-end -->
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite |
+| Backend | Hono on Cloudflare Workers |
+| Database | Neon (PostgreSQL) |
+| Media | Contentful CDN |
+| Auth | Session-based (cookie + Hono middleware) |
+| Deployment | Cloudflare Workers + Wrangler |
 
 ## Getting Started
-
-To start a new project with this template, run:
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/vite-react-template
-```
-
-A live deployment of this template is available at:
-[https://react-vite-template.templates.workers.dev](https://react-vite-template.templates.workers.dev)
-
-## Development
 
 Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
-Start the development server with:
+Start the dev server:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-Your application will be available at [http://localhost:5173](http://localhost:5173).
+App runs at [http://localhost:5173](http://localhost:5173). The Vite plugin proxies `/api/*` to the local Worker runtime automatically.
 
-## Production
-
-Build your project for production:
+## Commands
 
 ```bash
-npm run build
+pnpm dev          # Start dev server
+pnpm build        # Type-check + Vite build (outputs to dist/)
+pnpm preview      # Build then preview locally
+pnpm lint         # ESLint
+pnpm deploy       # Deploy to Cloudflare Workers
+pnpm check        # tsc + build + wrangler dry-run
+pnpm cf-typegen   # Regenerate worker-configuration.d.ts from wrangler bindings
+npx wrangler tail # Stream live worker logs
 ```
 
-Preview your build locally:
+## Architecture
+
+The app runs entirely on a single Cloudflare Worker that serves both the API and the static React SPA.
+
+- **`src/react-app/`** — React 19 frontend, compiled by Vite. Entry: `src/react-app/main.tsx`
+- **`src/worker/index.ts`** — Hono API backend, compiled for the Workers runtime
+
+In dev, Vite proxies `/api/*` to the Worker runtime. In production, the Worker serves `dist/client/` as static assets with SPA fallback, and handles `/api/*` via Hono.
+
+## Deployment
+
+Requires [Wrangler](https://developers.cloudflare.com/workers/wrangler/) and a Cloudflare account with the required secrets set.
 
 ```bash
-npm run preview
+pnpm deploy
 ```
 
-Deploy your project to Cloudflare Workers:
+See `docs/deployment.md` for secrets management and custom domain setup.
 
-```bash
-npm run build && npm run deploy
-```
+## Docs
 
-Monitor your workers:
+Full documentation lives in `docs/`:
 
-```bash
-npx wrangler tail
-```
-
-## Additional Resources
-
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Vite Documentation](https://vitejs.dev/guide/)
-- [React Documentation](https://reactjs.org/)
-- [Hono Documentation](https://hono.dev/)
+- `docs/overview.md` — What LouLink is, target users, core user flows, verification model
+- `docs/architecture.md` — Technical architecture, build targets, routing
+- `docs/database.md` — Neon (PostgreSQL) schema, connection pattern, migrations
+- `docs/contentful.md` — Contentful CDN, asset upload flow, image optimization
+- `docs/auth.md` — Session-based auth, Hono middleware pattern, authorization rules
+- `docs/deployment.md` — Cloudflare Workers deployment, secrets management, custom domain
+- `docs/features.md` — MVP scope, post-MVP roadmap
