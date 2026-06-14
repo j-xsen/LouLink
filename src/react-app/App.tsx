@@ -260,7 +260,7 @@ function ShapeButton({
 // ---------------------------------------------------------------------------
 
 type SessionData = { token: string; name: string };
-type ProfileData = { username: string; display_name: string; avatarUrl: string | null; categories: string[] };
+type ProfileData = { username: string; display_name: string; bio: string | null; avatarUrl: string | null; categories: string[] };
 type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
 type DraftHeader = { kind: "header"; title: string };
 type DraftItem = DraftLink | DraftHeader;
@@ -1456,10 +1456,34 @@ function Settings() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [bioError, setBioError] = useState("");
+  const [bioSuccess, setBioSuccess] = useState(false);
+  const [bioSubmitting, setBioSubmitting] = useState(false);
   const [categories, setCategories] = useState<string[]>(profile?.categories ?? []);
   const [categoryError, setCategoryError] = useState("");
   const [categorySuccess, setCategorySuccess] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
+
+  async function handleBioSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setBioSubmitting(true);
+    setBioError("");
+    setBioSuccess(false);
+    const res = await fetch("/api/me/bio", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ bio }),
+    });
+    const d = await res.json();
+    if (!res.ok) { setBioError(d.error ?? "Failed to update."); setBioSubmitting(false); return; }
+    setBioSuccess(true);
+    setBioSubmitting(false);
+    deleteCached(`/api/profile/${profile?.username}`);
+    deleteCached("/api/directory");
+    await loadSession();
+  }
 
   function toggleCategory(value: string) {
     setCategories((prev) =>
@@ -1534,6 +1558,25 @@ function Settings() {
           onSuccess={(url) => { setAvatarUrl(url); deleteCached(`/api/profile/${profile.username}`); }}
         />
       )}
+      <h2>Bio</h2>
+      <form onSubmit={handleBioSubmit}>
+        <p>
+          <label>
+            About you (max 300 characters)<br />
+            <textarea
+              value={bio}
+              onChange={(e) => { setBio(e.target.value.slice(0, 300)); setBioSuccess(false); }}
+              rows={4}
+              maxLength={300}
+              style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
+            />
+          </label>
+          <span style={{ fontSize: "0.85rem", color: "#888" }}>{bio.length}/300</span>
+        </p>
+        {bioError && <p><strong>{bioError}</strong></p>}
+        {bioSuccess && <p>Bio updated!</p>}
+        <p><button type="submit" disabled={bioSubmitting}>Save bio</button></p>
+      </form>
       <h2>Categories</h2>
       <form onSubmit={handleCategorySubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", margin: "0.5rem 0 1rem" }}>

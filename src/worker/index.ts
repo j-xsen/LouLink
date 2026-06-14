@@ -197,6 +197,20 @@ app.put("/api/me/categories", requireAuth, async (c) => {
   return c.json({ profile });
 });
 
+app.put("/api/me/bio", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ bio?: unknown }>(c);
+  const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 300) : "";
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET bio = ${bio || null}, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username, display_name, bio
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  return c.json({ profile });
+});
+
 app.put("/api/me/username", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ username?: unknown }>(c);
