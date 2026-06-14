@@ -1114,26 +1114,66 @@ function SignIn() {
 
   return (
     <>
-      <h1>Sign in</h1>
-      <form onSubmit={handleSubmit}>
-        <p>
-          <label>
-            Email<br />
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-        </p>
-        <p>
-          <label>
-            Password<br />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-        </p>
-        {error && <p><strong>{error}</strong></p>}
-        <p><button type="submit">Sign in</button></p>
-      </form>
-      <p>
-        <Link to="/">Back</Link> &middot; <Link to="/signup">Sign up instead</Link>
-      </p>
+      <div style={{ display: "flex", alignItems: "center", padding: "0.5rem 0 0" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", height: 44, flexShrink: 0 }}>
+          <img src={shape4} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: "left center", pointerEvents: "none", transform: "translateX(-5px)" }} />
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Go back"
+            style={{ position: "relative", zIndex: 1, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", color: "#12080b", padding: "0 1.5rem 0 0.55rem" }}
+          >
+            <ArrowLeft size={26} />
+          </button>
+        </div>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} />
+        </div>
+        <div style={{ flexShrink: 0, width: 56 }} />
+      </div>
+      <div style={{ textAlign: "center", marginTop: "1.75rem" }}>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 52, minWidth: 160 }}>
+          <img src={shape2} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none", zIndex: 0 }} />
+          <span style={{ position: "relative", zIndex: 1, fontSize: "1.5rem", fontFamily: "'Aladin', Georgia, serif", paddingTop: "4px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#12080b", padding: "0 1.75rem" }}>
+            Sign in
+          </span>
+        </div>
+      </div>
+      <div className="settings-card" style={{ marginTop: "1.5rem" }}>
+        <form onSubmit={handleSubmit}>
+          <p style={{ marginTop: 0 }}>
+            <label>
+              Email<br />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+          </p>
+          <p>
+            <label>
+              Password<br />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+          </p>
+          {error && <p><strong>{error}</strong></p>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginTop: "0.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button type="button" onClick={() => navigate("/signup")} style={{ borderRadius: 100, border: "2px solid #12080b", background: "transparent", color: "#12080b", padding: "0.45rem 1.4rem", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", letterSpacing: "0.03em" }}>Sign up</button>
+            </div>
+            <button type="submit" style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 80, padding: "0 2.5rem", background: "none", border: "none", cursor: "pointer" }}>
+              <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", zIndex: 0, pointerEvents: "none" }} viewBox="0 0 653.88 594.62" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="signin-btn-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#f78f1e" />
+                    <stop offset="100%" stopColor="#ee3666" />
+                  </linearGradient>
+                </defs>
+                <path d="M574.06,83.25C417.47-66.78,62.91,5.17,8.72,147.25c-14.01,36.72-12.83,90.94,16,122.67,55.51,61.1,187.2,9.87,197.33,37.33,11.86,32.17-173.22,90.43-170.67,165.33,2.33,68.44,160.99,141.44,298.67,117.33,83.79-14.67,179.89-68.84,176-117.33-5.11-63.73-180.6-89.08-176-117.33,5.37-32.98,241.46,19.87,293.33-69.33,32.05-55.12-14.54-150.17-69.33-202.67Z" fill="url(#signin-btn-grad)" stroke="#12080b" strokeWidth="14" strokeOpacity="0.2" />
+              </svg>
+              <span style={{ position: "relative", zIndex: 1, fontFamily: "'Aladin', Georgia, serif", fontSize: "1.45rem", color: "#12080b", textTransform: "uppercase", letterSpacing: "0.05em", paddingTop: "4px" }}>Submit</span>
+            </button>
+            <div />
+          </div>
+        </form>
+      </div>
     </>
   );
 }
