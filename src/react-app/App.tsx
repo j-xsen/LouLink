@@ -285,6 +285,28 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+// ---------------------------------------------------------------------------
+// In-memory API cache — survives SPA navigations, cleared on tab close
+// ---------------------------------------------------------------------------
+
+const _apiCache = new Map<string, { data: unknown; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+function getCached<T>(key: string): T | null {
+  const entry = _apiCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL) { _apiCache.delete(key); return null; }
+  return entry.data as T;
+}
+
+function setCached(key: string, data: unknown) {
+  _apiCache.set(key, { data, ts: Date.now() });
+}
+
+function deleteCached(key: string) {
+  _apiCache.delete(key);
+}
+
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
@@ -545,14 +567,16 @@ function MemberCard({ member }: { member: DirectoryMember }) {
 
 function Home() {
   const { session } = useAuth();
-  const [members, setMembers] = useState<DirectoryMember[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const cachedDir = getCached<DirectoryMember[]>("/api/directory");
+  const [members, setMembers] = useState<DirectoryMember[]>(cachedDir ?? []);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(cachedDir ? "ready" : "loading");
   useSeo({ title: "LouLink | Louisville Link Repertoire" });
 
   useEffect(() => {
+    if (cachedDir) return;
     fetch("/api/directory")
       .then((r) => r.json())
-      .then((data) => { setMembers(data as DirectoryMember[]); setStatus("ready"); })
+      .then((data) => { setCached("/api/directory", data); setMembers(data as DirectoryMember[]); setStatus("ready"); })
       .catch(() => setStatus("error"));
   }, []);
 
@@ -641,6 +665,7 @@ function CreatePage() {
       const d = await onboardRes.json();
       if (!onboardRes.ok) { setSaveError(d.error ?? "Failed to create profile."); setSaving(false); return; }
       clearDraft();
+      deleteCached("/api/directory");
       await loadSession();
       navigate("/");
       return;
@@ -658,6 +683,7 @@ function CreatePage() {
       return;
     }
     clearDraft();
+    deleteCached(`/api/profile/${profile.username}`);
     navigate("/");
   }
   const [linkTitle, setLinkTitle] = useState("");
@@ -1263,8 +1289,9 @@ function AvatarUpload({
 function Dashboard() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [members, setMembers] = useState<DirectoryMember[]>([]);
-  const [dirStatus, setDirStatus] = useState<"loading" | "ready" | "error">("loading");
+  const cachedDir = getCached<DirectoryMember[]>("/api/directory");
+  const [members, setMembers] = useState<DirectoryMember[]>(cachedDir ?? []);
+  const [dirStatus, setDirStatus] = useState<"loading" | "ready" | "error">(cachedDir ? "ready" : "loading");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useSeo({ title: "LouLink | Louisville Link Repertoire" });
@@ -1279,9 +1306,10 @@ function Dashboard() {
   }, [menuOpen]);
 
   useEffect(() => {
+    if (cachedDir) return;
     fetch("/api/directory")
       .then((r) => r.json())
-      .then((data) => { setMembers(data as DirectoryMember[]); setDirStatus("ready"); })
+      .then((data) => { setCached("/api/directory", data); setMembers(data as DirectoryMember[]); setDirStatus("ready"); })
       .catch(() => setDirStatus("error"));
   }, []);
 
@@ -1390,6 +1418,8 @@ function Settings() {
     if (!res.ok) { setCategoryError(d.error ?? "Failed to update."); setCategorySubmitting(false); return; }
     setCategorySuccess(true);
     setCategorySubmitting(false);
+    deleteCached(`/api/profile/${profile?.username}`);
+    deleteCached("/api/directory");
     await loadSession();
   }
 
@@ -1421,6 +1451,9 @@ function Settings() {
     }
     setSuccess(true);
     setSubmitting(false);
+    deleteCached(`/api/profile/${profile?.username}`);
+    deleteCached(`/api/profile/${username}`);
+    deleteCached("/api/directory");
     await loadSession();
   }
 
@@ -1434,7 +1467,7 @@ function Settings() {
         <AvatarUpload
           currentAvatarUrl={avatarUrl}
           token={session.token}
-          onSuccess={(url) => setAvatarUrl(url)}
+          onSuccess={(url) => { setAvatarUrl(url); deleteCached(`/api/profile/${profile.username}`); }}
         />
       )}
       <h2>Categories</h2>
@@ -1540,19 +1573,28 @@ type PublicProfile = {
 
 function ProfilePage() {
   const { username } = useParams<{ username: string }>();
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [items, setItems] = useState<PublicItem[]>([]);
-  const [status, setStatus] = useState<"loading" | "found" | "not-found">("loading");
+  const cacheKey = `/api/profile/${username}`;
+  const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey);
+  const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
+  const [items, setItems] = useState<PublicItem[]>(() =>
+    cachedProfile ? (cachedProfile.links ?? []).map((l: any) => l.kind === "header"
+      ? { kind: "header" as const, title: l.title }
+      : { kind: "link" as const, title: l.title, url: l.url, icon: l.icon ?? undefined }
+    ) : []
+  );
+  const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
   });
 
   useEffect(() => {
     if (!username) { setStatus("not-found"); return; }
+    if (cachedProfile) return;
     fetch(`/api/profile/${encodeURIComponent(username)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (!d?.profile) { setStatus("not-found"); return; }
+        setCached(cacheKey, d);
         setProfile(d.profile);
         setItems((d.links ?? []).map((l: any) => l.kind === "header"
           ? { kind: "header", title: l.title }
