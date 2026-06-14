@@ -7,14 +7,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/j-xsen/loulink">GitHub</a> · <a href="https://loulink.com">loulink.com</a>
+  <a href="https://github.com/j-xsen/loulink">GitHub</a> · <a href="https://loul.ink">loul.ink</a>
 </p>
 
 ---
 
 ## What It Is
 
-LouLink gives Louisville artists and businesses a single shareable URL that aggregates all their online presences — Instagram, Bandcamp, Etsy, website, and more — into one public profile page at `loulink.com/<username>`.
+LouLink gives Louisville artists and businesses a single shareable URL that aggregates all their online presences — Instagram, Bandcamp, Etsy, website, and more — into one public profile page at `loul.ink/<username>`.
 
 Unlike Linktree, LouLink is **Louisville-only**. Every user must be verified as Louisville-based, and the home page is a browsable directory of the entire local creative and business community.
 
