@@ -50,22 +50,30 @@ export const THEME_NAMES: Record<string, string> = {
   midnight: "Midnight",
 };
 
-// accent_color column stores "themeKeyOrHex|headerHex|mono" — any part may be empty/absent
-export function parseAccentColor(raw: string | null): { themeKey: string | null; headerColor: string | null; monoSocial: boolean } {
-  if (!raw) return { themeKey: null, headerColor: null, monoSocial: false };
+export const AVATAR_SHAPES = ["circle", "A", "B", "C"] as const;
+export type AvatarShape = typeof AVATAR_SHAPES[number];
+
+// accent_color column stores "themeKeyOrHex|headerHex|mono|shape" — any part may be empty/absent
+export function parseAccentColor(raw: string | null): { themeKey: string | null; headerColor: string | null; monoSocial: boolean; avatarShape: AvatarShape } {
+  if (!raw) return { themeKey: null, headerColor: null, monoSocial: false, avatarShape: "circle" };
   const parts = raw.split("|");
+  const shapePart = parts[3] ?? "";
   return {
     themeKey: parts[0] || null,
     headerColor: parts[1] || null,
     monoSocial: parts[2] === "mono",
+    avatarShape: (AVATAR_SHAPES as readonly string[]).includes(shapePart) ? shapePart as AvatarShape : "circle",
   };
 }
 
-export function buildAccentColor(themeKey: string | null, headerColor: string | null, monoSocial: boolean): string | null {
-  if (!themeKey && !headerColor && !monoSocial) return null;
-  if (monoSocial) return `${themeKey ?? ""}|${headerColor ?? ""}|mono`;
-  if (!headerColor) return themeKey;
-  return `${themeKey ?? ""}|${headerColor}`;
+export function buildAccentColor(themeKey: string | null, headerColor: string | null, monoSocial: boolean, avatarShape: AvatarShape = "circle"): string | null {
+  const monoPart = monoSocial ? "mono" : "";
+  const shapePart = avatarShape !== "circle" ? avatarShape : "";
+  if (!themeKey && !headerColor && !monoPart && !shapePart) return null;
+  if (shapePart) return `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}`;
+  if (monoPart) return `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}`;
+  if (headerColor) return `${themeKey ?? ""}|${headerColor}`;
+  return themeKey;
 }
 
 export const HEADER_COLOR_PRESETS: Array<{ name: string; color: string | null }> = [

@@ -213,18 +213,24 @@ app.put("/api/me/bio", requireAuth, async (c) => {
 
 app.put("/api/me/accent", requireAuth, async (c) => {
   const userId = c.get("userId");
-  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown }>(c);
+  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown }>(c);
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
   const VALID_THEMES = new Set(["derby", "bluegrass", "river", "bourbon", "lilac", "midnight"]);
+  const VALID_SHAPES = new Set(["circle", "A", "B", "C"]);
   const rawTheme = typeof body?.accent_color === "string" ? body.accent_color.trim() : null;
   const rawHeader = typeof body?.header_color === "string" ? body.header_color.trim() : null;
+  const rawShape = typeof body?.avatar_shape === "string" ? body.avatar_shape.trim() : "circle";
   const monoSocial = body?.mono_social === true;
   const themeKey = rawTheme && (HEX_RE.test(rawTheme) || VALID_THEMES.has(rawTheme)) ? rawTheme : null;
   const headerColor = rawHeader && HEX_RE.test(rawHeader) ? rawHeader : null;
-  const stored = !themeKey && !headerColor && !monoSocial ? null
-    : monoSocial ? `${themeKey ?? ""}|${headerColor ?? ""}|mono`
-    : themeKey && !headerColor ? themeKey
-    : `${themeKey ?? ""}|${headerColor}`;
+  const avatarShape = VALID_SHAPES.has(rawShape) ? rawShape : "circle";
+  const monoPart = monoSocial ? "mono" : "";
+  const shapePart = avatarShape !== "circle" ? avatarShape : "";
+  const stored = !themeKey && !headerColor && !monoPart && !shapePart ? null
+    : shapePart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}`
+    : monoPart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}`
+    : headerColor ? `${themeKey ?? ""}|${headerColor}`
+    : themeKey;
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
     UPDATE public.profiles SET accent_color = ${stored}, updated_at = now()

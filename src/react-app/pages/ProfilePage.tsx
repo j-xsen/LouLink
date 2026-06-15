@@ -8,7 +8,8 @@ import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
-import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, parseAccentColor, type ProfileTheme } from "../types";
+import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
+import { BLOB_SHAPES } from "../components/ui";
 import { useAuth } from "../auth";
 
 type PublicItem =
@@ -72,10 +73,11 @@ export default function ProfilePage() {
 
   // Pending theme key for owner preview before saving
   const themeInitialized = useRef(false);
-  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
+  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono, avatarShape: cachedShape } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
   const [pendingKey, setPendingKey] = useState<string | null>(cachedTheme);
   const [pendingHeader, setPendingHeader] = useState<string | null>(cachedHeader);
   const [pendingMono, setPendingMono] = useState<boolean>(cachedMono);
+  const [pendingShape, setPendingShape] = useState<AvatarShape>(cachedShape);
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
 
@@ -99,10 +101,11 @@ export default function ProfilePage() {
         setStatus("found");
         if (!themeInitialized.current) {
           themeInitialized.current = true;
-          const { themeKey, headerColor, monoSocial } = parseAccentColor(d.profile.accent_color ?? null);
+          const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(d.profile.accent_color ?? null);
           setPendingKey(themeKey);
           setPendingHeader(headerColor);
           setPendingMono(monoSocial);
+          setPendingShape(avatarShape);
         }
       })
       .catch(() => setStatus("not-found"));
@@ -112,10 +115,11 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile && !themeInitialized.current) {
       themeInitialized.current = true;
-      const { themeKey, headerColor, monoSocial } = parseAccentColor(profile.accent_color ?? null);
+      const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(profile.accent_color ?? null);
       setPendingKey(themeKey);
       setPendingHeader(headerColor);
       setPendingMono(monoSocial);
+      setPendingShape(avatarShape);
     }
   }, [profile]);
 
@@ -142,8 +146,8 @@ export default function ProfilePage() {
 
   const isOwner = !!authProfile && authProfile.username === username;
   const theme = resolveTheme(pendingKey, items);
-  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono } = parseAccentColor(profile?.accent_color ?? null);
-  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono;
+  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape } = parseAccentColor(profile?.accent_color ?? null);
+  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape;
 
   useEffect(() => {
     if (!profile) return;
@@ -163,7 +167,7 @@ export default function ProfilePage() {
     const res = await fetch("/api/me/accent", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono }),
+      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono, avatar_shape: pendingShape }),
     });
     setThemeSaving(false);
     if (res.ok) {
@@ -194,7 +198,7 @@ export default function ProfilePage() {
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
         {profile.avatarUrl && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-            <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} />
+            <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
           </div>
         )}
         <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text }}>
@@ -439,6 +443,33 @@ export default function ProfilePage() {
                 style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
               />
             </label>
+          </div>
+
+          {/* Avatar shape picker */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Shape</span>
+            {AVATAR_SHAPES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                title={s === "circle" ? "Circle" : `Blob ${s}`}
+                onClick={() => { setPendingShape(s); setThemeSaved(false); }}
+                style={{
+                  width: 34, height: 34, flexShrink: 0, background: "none", border: "none",
+                  cursor: "pointer", padding: 2,
+                  outline: pendingShape === s ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outlineOffset: 2, borderRadius: 4, transition: "outline-color 150ms",
+                }}
+              >
+                {s === "circle" ? (
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${theme.label}99` }} />
+                ) : (
+                  <svg viewBox={BLOB_SHAPES[s as keyof typeof BLOB_SHAPES].viewBox} style={{ width: 30, height: 30, display: "block" }}>
+                    <path d={BLOB_SHAPES[s as keyof typeof BLOB_SHAPES].d} fill={`${theme.label}99`} />
+                  </svg>
+                )}
+              </button>
+            ))}
           </div>
 
           {/* Social color toggle */}
