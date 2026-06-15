@@ -37,7 +37,7 @@ export const THEMES: Record<string, ProfileTheme> = {
   river:     { bg: "#8ab8e8", card: "#ffffff", text: "#081428", label: "#1a4fd6" },
   bourbon:   { bg: "#f5a030", card: "#fffdf0", text: "#2c1800", label: "#8a4500" },
   midnight:  { bg: "#0f1629", card: "#1a2744", text: "#e2eaf8", label: "#93b4f0" },
-  mono:      { bg: "#f0f0f0", card: "#ffffff", text: "#111111", label: "#111111" },
+  ink:       { bg: "#f2efe8", card: "#fffef9", text: "#0a0a0a", label: "#0a0a0a" },
   terminal:  { bg: "#0a0e08", card: "#111a0f", text: "#39ff14", label: "#39ff14" },
 };
 
@@ -46,7 +46,7 @@ export const THEME_NAMES: Record<string, string> = {
   river: "River",
   bourbon: "Bourbon",
   midnight: "Midnight",
-  mono: "Mono",
+  ink: "Ink",
   terminal: "Terminal",
 };
 

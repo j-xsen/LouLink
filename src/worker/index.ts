@@ -215,7 +215,7 @@ app.put("/api/me/accent", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown }>(c);
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
-  const VALID_THEMES = new Set(["bluegrass", "river", "bourbon", "midnight", "mono", "terminal"]);
+  const VALID_THEMES = new Set(["bluegrass", "river", "bourbon", "midnight", "ink", "terminal"]);
   const VALID_SHAPES = new Set(["circle", "A", "B", "C"]);
   const rawTheme = typeof body?.accent_color === "string" ? body.accent_color.trim() : null;
   const rawHeader = typeof body?.header_color === "string" ? body.header_color.trim() : null;
