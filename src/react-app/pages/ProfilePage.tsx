@@ -80,6 +80,7 @@ export default function ProfilePage() {
   const [pendingShape, setPendingShape] = useState<AvatarShape>(cachedShape);
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(true);
 
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
@@ -198,14 +199,23 @@ export default function ProfilePage() {
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
         {profile.avatarUrl && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-            <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+              {profile.verified && (
+                <span title="Verified Louisville" style={{
+                  position: "absolute", bottom: 2, right: 2,
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: theme.label, color: theme.card,
+                  fontSize: "0.65rem", fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: `0 0 0 2px ${theme.bg}`,
+                }}>✓</span>
+              )}
+            </div>
           </div>
         )}
         <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text }}>
           {profile.display_name}
-          {profile.verified && (
-            <span style={{ color: theme.label, fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
-          )}
         </h1>
         {profile.bio && (
           <p style={{ color: theme.text, opacity: 0.65, margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
@@ -341,8 +351,27 @@ export default function ProfilePage() {
         </Link>
       </div>
 
+      {/* Owner theme toolbar — collapsed bookmark tab */}
+      {isOwner && !paletteOpen && (
+        <button
+          type="button"
+          title="Open theme palette"
+          onClick={() => setPaletteOpen(true)}
+          style={{
+            position: "fixed", bottom: 0, right: 0,
+            width: 44, height: 36,
+            background: `${theme.card}f0`, backdropFilter: "blur(12px)",
+            border: `1px solid ${theme.label}30`, borderBottom: "none",
+            borderRadius: "8px 8px 0 0",
+            color: theme.text, fontSize: "0.85rem",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 100, boxShadow: "0 -2px 8px #0002",
+          }}
+        >↑</button>
+      )}
+
       {/* Owner theme toolbar */}
-      {isOwner && (
+      {isOwner && paletteOpen && (
         <div style={{
           position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
           width: "100%", maxWidth: 600,
@@ -354,6 +383,19 @@ export default function ProfilePage() {
           zIndex: 100,
           boxSizing: "border-box",
         }}>
+          {/* Close button */}
+          <button
+            type="button"
+            title="Close palette"
+            onClick={() => setPaletteOpen(false)}
+            style={{
+              position: "absolute", top: 6, right: 8,
+              background: "none", border: "none", cursor: "pointer",
+              color: theme.text, opacity: 0.4, fontSize: "1rem", lineHeight: 1,
+              padding: "2px 4px",
+            }}
+          >✕</button>
+
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Theme</span>
 
@@ -485,28 +527,26 @@ export default function ProfilePage() {
             </span>
           </label>
 
-          {(isDirty || themeSaved) && (
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              {themeSaved && (
-                <span style={{ fontSize: "0.75rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
-              )}
-              {isDirty && !themeSaved && (
-                <button
-                  type="button"
-                  onClick={handleSaveTheme}
-                  disabled={themeSaving}
-                  style={{
-                    background: theme.label, color: theme.card,
-                    border: "none", borderRadius: 20, padding: "0.3rem 0.9rem",
-                    fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
-                    opacity: themeSaving ? 0.6 : 1,
-                  }}
-                >
-                  {themeSaving ? "…" : "Save"}
-                </button>
-              )}
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
+            {themeSaved && (
+              <span style={{ fontSize: "0.75rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveTheme}
+              disabled={!isDirty || themeSaving}
+              style={{
+                background: theme.bg,
+                color: theme.text,
+                border: "none", borderRadius: 20, padding: "0.3rem 0.9rem",
+                fontSize: "0.75rem", fontWeight: 700, cursor: isDirty ? "pointer" : "default",
+                opacity: themeSaving ? 0.5 : isDirty ? 1 : 0.25,
+                transition: "opacity 200ms",
+              }}
+            >
+              {themeSaving ? "…" : "Save"}
+            </button>
+          </div>
         </div>
       )}
     </div>
