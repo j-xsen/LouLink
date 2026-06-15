@@ -213,15 +213,21 @@ app.put("/api/me/bio", requireAuth, async (c) => {
 
 app.put("/api/me/accent", requireAuth, async (c) => {
   const userId = c.get("userId");
-  const body = await readJson<{ accent_color?: unknown }>(c);
-  const raw = body?.accent_color;
+  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown }>(c);
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
   const VALID_THEMES = new Set(["derby", "bluegrass", "river", "bourbon", "lilac", "midnight"]);
-  const value = typeof raw === "string" ? raw.trim() : null;
-  const color = value && (HEX_RE.test(value) || VALID_THEMES.has(value)) ? value : null;
+  const rawTheme = typeof body?.accent_color === "string" ? body.accent_color.trim() : null;
+  const rawHeader = typeof body?.header_color === "string" ? body.header_color.trim() : null;
+  const monoSocial = body?.mono_social === true;
+  const themeKey = rawTheme && (HEX_RE.test(rawTheme) || VALID_THEMES.has(rawTheme)) ? rawTheme : null;
+  const headerColor = rawHeader && HEX_RE.test(rawHeader) ? rawHeader : null;
+  const stored = !themeKey && !headerColor && !monoSocial ? null
+    : monoSocial ? `${themeKey ?? ""}|${headerColor ?? ""}|mono`
+    : themeKey && !headerColor ? themeKey
+    : `${themeKey ?? ""}|${headerColor}`;
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    UPDATE public.profiles SET accent_color = ${color}, updated_at = now()
+    UPDATE public.profiles SET accent_color = ${stored}, updated_at = now()
     WHERE user_id = ${userId}
     RETURNING username, accent_color
   `;

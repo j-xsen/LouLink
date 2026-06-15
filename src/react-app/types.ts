@@ -33,11 +33,11 @@ export type ProfileTheme = {
 };
 
 export const THEMES: Record<string, ProfileTheme> = {
-  derby:     { bg: "#fff0f0", card: "#ffffff", text: "#1a0505", label: "#c8102e" },
-  bluegrass: { bg: "#f0faf4", card: "#ffffff", text: "#071a0e", label: "#2d7a4a" },
-  river:     { bg: "#eff6ff", card: "#ffffff", text: "#0a1a2e", label: "#2563eb" },
-  bourbon:   { bg: "#fffbf0", card: "#fef9e7", text: "#2c1a00", label: "#b45309" },
-  lilac:     { bg: "#faf5ff", card: "#ffffff", text: "#1e0a3c", label: "#7c3aed" },
+  derby:     { bg: "#f5aaaa", card: "#ffffff", text: "#2d0808", label: "#c8102e" },
+  bluegrass: { bg: "#8ecfaa", card: "#ffffff", text: "#071a0e", label: "#1a6635" },
+  river:     { bg: "#8ab8e8", card: "#ffffff", text: "#081428", label: "#1a4fd6" },
+  bourbon:   { bg: "#f5a030", card: "#fffdf0", text: "#2c1800", label: "#8a4500" },
+  lilac:     { bg: "#c898e8", card: "#ffffff", text: "#180828", label: "#6b20e0" },
   midnight:  { bg: "#0f1629", card: "#1a2744", text: "#e2eaf8", label: "#93b4f0" },
 };
 
@@ -49,6 +49,32 @@ export const THEME_NAMES: Record<string, string> = {
   lilac: "Lilac",
   midnight: "Midnight",
 };
+
+// accent_color column stores "themeKeyOrHex|headerHex|mono" — any part may be empty/absent
+export function parseAccentColor(raw: string | null): { themeKey: string | null; headerColor: string | null; monoSocial: boolean } {
+  if (!raw) return { themeKey: null, headerColor: null, monoSocial: false };
+  const parts = raw.split("|");
+  return {
+    themeKey: parts[0] || null,
+    headerColor: parts[1] || null,
+    monoSocial: parts[2] === "mono",
+  };
+}
+
+export function buildAccentColor(themeKey: string | null, headerColor: string | null, monoSocial: boolean): string | null {
+  if (!themeKey && !headerColor && !monoSocial) return null;
+  if (monoSocial) return `${themeKey ?? ""}|${headerColor ?? ""}|mono`;
+  if (!headerColor) return themeKey;
+  return `${themeKey ?? ""}|${headerColor}`;
+}
+
+export const HEADER_COLOR_PRESETS: Array<{ name: string; color: string | null }> = [
+  { name: "Auto", color: null },
+  { name: "Black", color: "#111111" },
+  { name: "Red", color: "#c8102e" },
+  { name: "Blue", color: "#1a4fd6" },
+  { name: "Purple", color: "#6b20e0" },
+];
 
 export const CATEGORY_LABELS: Record<string, string> = {
   music: "Music",

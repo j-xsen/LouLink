@@ -2,13 +2,14 @@
 // Public profile page
 // ---------------------------------------------------------------------------
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getCached, setCached } from "../lib/cache";
+import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
-import { CATEGORY_LABELS, THEMES, type ProfileTheme } from "../types";
+import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, parseAccentColor, type ProfileTheme } from "../types";
+import { useAuth } from "../auth";
 
 type PublicItem =
   | { kind: "link"; title: string; url: string; icon?: string }
@@ -56,6 +57,7 @@ function resolveTheme(accentColor: string | null | undefined, items: PublicItem[
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const { session, profile: authProfile } = useAuth();
   const cacheKey = `/api/profile/${username}`;
   const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey);
   const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
@@ -67,6 +69,16 @@ export default function ProfilePage() {
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
   const [ogImages, setOgImages] = useState<Record<string, string>>({});
+
+  // Pending theme key for owner preview before saving
+  const themeInitialized = useRef(false);
+  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
+  const [pendingKey, setPendingKey] = useState<string | null>(cachedTheme);
+  const [pendingHeader, setPendingHeader] = useState<string | null>(cachedHeader);
+  const [pendingMono, setPendingMono] = useState<boolean>(cachedMono);
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [themeSaved, setThemeSaved] = useState(false);
+
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
   });
@@ -85,9 +97,27 @@ export default function ProfilePage() {
           : { kind: "link", title: l.title, url: l.url, icon: l.icon ?? undefined }
         ));
         setStatus("found");
+        if (!themeInitialized.current) {
+          themeInitialized.current = true;
+          const { themeKey, headerColor, monoSocial } = parseAccentColor(d.profile.accent_color ?? null);
+          setPendingKey(themeKey);
+          setPendingHeader(headerColor);
+          setPendingMono(monoSocial);
+        }
       })
       .catch(() => setStatus("not-found"));
   }, [username]);
+
+  // Sync pendingKey once when cached profile is used
+  useEffect(() => {
+    if (profile && !themeInitialized.current) {
+      themeInitialized.current = true;
+      const { themeKey, headerColor, monoSocial } = parseAccentColor(profile.accent_color ?? null);
+      setPendingKey(themeKey);
+      setPendingHeader(headerColor);
+      setPendingMono(monoSocial);
+    }
+  }, [profile]);
 
   useEffect(() => {
     const linkUrls = items
@@ -110,7 +140,10 @@ export default function ProfilePage() {
     });
   }, [items]);
 
-  const theme = resolveTheme(profile?.accent_color, items);
+  const isOwner = !!authProfile && authProfile.username === username;
+  const theme = resolveTheme(pendingKey, items);
+  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono } = parseAccentColor(profile?.accent_color ?? null);
+  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono;
 
   useEffect(() => {
     if (!profile) return;
@@ -123,6 +156,24 @@ export default function ProfilePage() {
       document.documentElement.style.background = prevHtml;
     };
   }, [theme.bg, profile]);
+
+  async function handleSaveTheme() {
+    if (!session || !profile || themeSaving) return;
+    setThemeSaving(true);
+    const res = await fetch("/api/me/accent", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono }),
+    });
+    setThemeSaving(false);
+    if (res.ok) {
+      const d = await res.json();
+      setProfile((p) => p ? { ...p, accent_color: d.profile.accent_color } : p);
+      deleteCached(cacheKey);
+      setThemeSaved(true);
+      setTimeout(() => setThemeSaved(false), 2000);
+    }
+  }
 
   if (status === "loading") return <p>Loading…</p>;
   if (status === "not-found" || !profile) {
@@ -138,7 +189,7 @@ export default function ProfilePage() {
   const linkItems = items.filter((it) => it.kind === "link");
 
   return (
-    <div style={{ paddingBottom: "4rem", color: theme.text, "--accent": theme.label } as React.CSSProperties & { "--accent": string }}>
+    <div style={{ paddingBottom: isOwner ? "8rem" : "4rem", color: theme.text, "--accent": theme.label } as React.CSSProperties & { "--accent": string }}>
       {/* Profile header */}
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
         {profile.avatarUrl && (
@@ -180,7 +231,7 @@ export default function ProfilePage() {
           <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
             {Object.entries(profile.social_links).map(([platform, url]) => {
               if (!url || !BRAND_COLORS[platform]) return null;
-              const color = BRAND_COLORS[platform];
+              const color = pendingMono ? theme.text : BRAND_COLORS[platform];
               return (
                 <a
                   key={platform}
@@ -218,8 +269,8 @@ export default function ProfilePage() {
                     fontSize: "0.7rem",
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
-                    color: theme.text,
-                    opacity: 0.4,
+                    color: pendingHeader ?? theme.text,
+                    opacity: pendingHeader ? 1 : 0.4,
                   }}>
                     {item.title}
                   </span>
@@ -285,6 +336,148 @@ export default function ProfilePage() {
           loul.ink
         </Link>
       </div>
+
+      {/* Owner theme toolbar */}
+      {isOwner && (
+        <div style={{
+          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 600,
+          background: `${theme.card}f0`,
+          backdropFilter: "blur(12px)",
+          borderTop: `1px solid ${theme.label}30`,
+          padding: "0.6rem 1rem",
+          display: "flex", flexDirection: "column", gap: "0.5rem",
+          zIndex: 100,
+          boxSizing: "border-box",
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Theme</span>
+
+          {/* Auto */}
+          <button
+            type="button"
+            title="Auto"
+            onClick={() => { setPendingKey(null); setThemeSaved(false); }}
+            style={{
+              width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+              background: "linear-gradient(135deg, #f78f1e 0%, #56b0e3 50%, #9b59b6 100%)",
+              border: "none", cursor: "pointer", padding: 0,
+              outline: pendingKey === null ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              outlineOffset: 2, transition: "outline-color 150ms",
+            }}
+          />
+
+          {/* Presets */}
+          {Object.entries(THEMES).map(([key, t]) => (
+            <button
+              key={key}
+              type="button"
+              title={THEME_NAMES[key]}
+              onClick={() => { setPendingKey(key); setThemeSaved(false); }}
+              style={{
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                background: t.bg,
+                border: "none", cursor: "pointer", padding: 0,
+                outline: pendingKey === key ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }}
+            />
+          ))}
+
+          {/* Custom color picker */}
+          <label title="Custom color" style={{ position: "relative", width: 26, height: 26, flexShrink: 0, cursor: "pointer" }}>
+            <span style={{
+              display: "block", width: 26, height: 26, borderRadius: "50%",
+              background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+              outline: (pendingKey !== null && !THEMES[pendingKey]) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              outlineOffset: 2, transition: "outline-color 150ms",
+            }} />
+            <input
+              type="color"
+              value={(pendingKey !== null && !THEMES[pendingKey]) ? pendingKey : "#ee3666"}
+              onChange={(e) => { setPendingKey(e.target.value); setThemeSaved(false); }}
+              style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+            />
+          </label>
+
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Headers</span>
+            {HEADER_COLOR_PRESETS.map(({ name, color }) => (
+              <button
+                key={name}
+                type="button"
+                title={name}
+                onClick={() => { setPendingHeader(color); setThemeSaved(false); }}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                  background: color === null ? `linear-gradient(135deg, ${theme.text}66, ${theme.text}22)` : theme.card,
+                  border: color === null ? `2px dashed ${theme.text}44` : `1.5px solid ${theme.text}18`,
+                  cursor: "pointer", padding: 0,
+                  outline: pendingHeader === color ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outlineOffset: 2, transition: "outline-color 150ms",
+                  color: color ?? "transparent",
+                  fontSize: "1.1rem", fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                {color !== null && "A"}
+              </button>
+            ))}
+            <label title="Custom header color" style={{ position: "relative", width: 26, height: 26, flexShrink: 0, cursor: "pointer" }}>
+              <span style={{
+                display: "block", width: 26, height: 26, borderRadius: "50%",
+                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                outline: (pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }} />
+              <input
+                type="color"
+                value={(pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? pendingHeader : "#888888"}
+                onChange={(e) => { setPendingHeader(e.target.value); setThemeSaved(false); }}
+                style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              />
+            </label>
+          </div>
+
+          {/* Social color toggle */}
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={!pendingMono}
+              onChange={(e) => { setPendingMono(!e.target.checked); setThemeSaved(false); }}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.label }}
+            />
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5 }}>
+              Social colors
+            </span>
+          </label>
+
+          {(isDirty || themeSaved) && (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              {themeSaved && (
+                <span style={{ fontSize: "0.75rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
+              )}
+              {isDirty && !themeSaved && (
+                <button
+                  type="button"
+                  onClick={handleSaveTheme}
+                  disabled={themeSaving}
+                  style={{
+                    background: theme.label, color: theme.card,
+                    border: "none", borderRadius: 20, padding: "0.3rem 0.9rem",
+                    fontSize: "0.75rem", fontWeight: 700, cursor: "pointer",
+                    opacity: themeSaving ? 0.6 : 1,
+                  }}
+                >
+                  {themeSaving ? "…" : "Save"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
