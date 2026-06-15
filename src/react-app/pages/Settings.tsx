@@ -7,9 +7,22 @@ import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
-import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
-import { AvatarUpload } from "../components/Avatar";
-import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, parseAccentColor } from "../types";
+import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
+import { AvatarImage } from "../components/Avatar";
+import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
+
+function resolvePreviewTheme(accentColor: string | null): ProfileTheme {
+  if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
+  if (accentColor && accentColor.startsWith("#")) {
+    const r = parseInt(accentColor.slice(1, 3), 16);
+    const g = parseInt(accentColor.slice(3, 5), 16);
+    const b = parseInt(accentColor.slice(5, 7), 16);
+    const mix = 0.22;
+    const bg = `rgb(${Math.round(r * mix + 255 * (1 - mix))},${Math.round(g * mix + 255 * (1 - mix))},${Math.round(b * mix + 255 * (1 - mix))})`;
+    return { bg, card: "#ffffff", text: "#111111", label: accentColor };
+  }
+  return { bg: "#fdf8f2", card: "#ffffff", text: "#111111", label: "#6b7280" };
+}
 
 export default function Settings() {
   const { session, profile, loadSession } = useAuth();
@@ -27,15 +40,19 @@ export default function Settings() {
   const [categoryError, setCategoryError] = useState("");
   const [categorySuccess, setCategorySuccess] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
-  const { themeKey: initTheme, headerColor: initHeader } = parseAccentColor(profile?.accent_color ?? null);
+
+  const { themeKey: initTheme, headerColor: initHeader, monoSocial: initMono, avatarShape: initShape } = parseAccentColor(profile?.accent_color ?? null);
   const [accentColor, setAccentColor] = useState<string | null>(initTheme);
-  const [colorError, setColorError] = useState("");
-  const [colorSuccess, setColorSuccess] = useState(false);
-  const [colorSubmitting, setColorSubmitting] = useState(false);
   const [headerColor, setHeaderColor] = useState<string | null>(initHeader);
-  const [headerColorError, setHeaderColorError] = useState("");
-  const [headerColorSuccess, setHeaderColorSuccess] = useState(false);
-  const [headerColorSubmitting, setHeaderColorSubmitting] = useState(false);
+  const [monoSocial, setMonoSocial] = useState<boolean>(initMono);
+  const [avatarShape, setAvatarShape] = useState<AvatarShape>(initShape);
+  const [appearanceError, setAppearanceError] = useState("");
+  const [appearanceSuccess, setAppearanceSuccess] = useState(false);
+  const [appearanceSubmitting, setAppearanceSubmitting] = useState(false);
+
+  const previewTheme = resolvePreviewTheme(accentColor);
+  const isCustomAccent = accentColor !== null && !THEMES[accentColor];
+  const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
 
   async function handleBioSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,44 +100,21 @@ export default function Settings() {
     await loadSession();
   }
 
-  const isCustom = accentColor !== null && !THEMES[accentColor];
-
-  async function handleColorSubmit(e: React.FormEvent) {
+  async function handleAppearanceSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!session) return;
-    setColorSubmitting(true);
-    setColorError("");
-    setColorSuccess(false);
+    setAppearanceSubmitting(true);
+    setAppearanceError("");
+    setAppearanceSuccess(false);
     const res = await fetch("/api/me/accent", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ accent_color: accentColor, header_color: headerColor }),
+      body: JSON.stringify({ accent_color: accentColor, header_color: headerColor, mono_social: monoSocial, avatar_shape: avatarShape }),
     });
     const d = await res.json();
-    if (!res.ok) { setColorError(d.error ?? "Failed to update."); setColorSubmitting(false); return; }
-    setColorSuccess(true);
-    setColorSubmitting(false);
-    deleteCached(`/api/profile/${profile?.username}`);
-    await loadSession();
-  }
-
-  const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
-
-  async function handleHeaderColorSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!session) return;
-    setHeaderColorSubmitting(true);
-    setHeaderColorError("");
-    setHeaderColorSuccess(false);
-    const res = await fetch("/api/me/accent", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ accent_color: accentColor, header_color: headerColor }),
-    });
-    const d = await res.json();
-    if (!res.ok) { setHeaderColorError(d.error ?? "Failed to update."); setHeaderColorSubmitting(false); return; }
-    setHeaderColorSuccess(true);
-    setHeaderColorSubmitting(false);
+    if (!res.ok) { setAppearanceError(d.error ?? "Failed to update."); setAppearanceSubmitting(false); return; }
+    setAppearanceSuccess(true);
+    setAppearanceSubmitting(false);
     deleteCached(`/api/profile/${profile?.username}`);
     await loadSession();
   }
@@ -128,8 +122,7 @@ export default function Settings() {
   const changed = username !== profile?.username;
   const validationError = changed && username ? validateUsername(username) : null;
   const checkStatus = useUsernameCheck(changed ? username : "");
-  const canSubmit =
-    changed && !validationError && checkStatus === "available" && !submitting;
+  const canSubmit = changed && !validationError && checkStatus === "available" && !submitting;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -139,18 +132,11 @@ export default function Settings() {
     setSuccess(false);
     const res = await fetch("/api/me/username", {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.token}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
       body: JSON.stringify({ username }),
     });
     const d = await res.json();
-    if (!res.ok) {
-      setError(d.error ?? "Something went wrong.");
-      setSubmitting(false);
-      return;
-    }
+    if (!res.ok) { setError(d.error ?? "Something went wrong."); setSubmitting(false); return; }
     setSuccess(true);
     setSubmitting(false);
     deleteCached(`/api/profile/${profile?.username}`);
@@ -161,20 +147,226 @@ export default function Settings() {
 
   if (!profile) return null;
 
+  const labelStyle: React.CSSProperties = {
+    fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.08em", color: "#888", marginBottom: "0.5rem", display: "block",
+  };
+
   return (
     <>
       <PageHeader />
       <ShapeTitle>Settings</ShapeTitle>
+
+      {/* Profile picture */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Profile picture</h2>
         {session && (
-          <AvatarUpload
-            currentAvatarUrl={avatarUrl}
-            token={session.token}
-            onSuccess={(url) => { setAvatarUrl(url); deleteCached(`/api/profile/${profile.username}`); }}
-          />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
+            <AvatarImage src={avatarUrl} size={80} alt="Profile picture" shape={avatarShape} />
+          </div>
+        )}
+        {session && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <input
+              type="file"
+              id="avatar-upload"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const res = await fetch("/api/me/avatar", {
+                  method: "POST",
+                  headers: { "Content-Type": file.type, Authorization: `Bearer ${session.token}` },
+                  body: file,
+                });
+                const d = await res.json();
+                if (res.ok) { setAvatarUrl(d.avatarUrl); deleteCached(`/api/profile/${profile.username}`); }
+                e.target.value = "";
+              }}
+            />
+            <p style={{ textAlign: "center" }}>
+              <button type="button" onClick={() => document.getElementById("avatar-upload")?.click()}>
+                {avatarUrl ? "Change photo" : "Upload photo"}
+              </button>
+            </p>
+          </div>
         )}
       </div>
+
+      {/* Unified appearance */}
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Profile appearance</h2>
+        <form onSubmit={handleAppearanceSubmit}>
+
+          {/* Live preview */}
+          <div style={{
+            borderRadius: 14, overflow: "hidden", border: "1px solid #e5e7eb",
+            marginBottom: "1.75rem", background: previewTheme.bg,
+            transition: "background 200ms",
+          }}>
+            <div style={{ padding: "1.25rem 1rem", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
+                {avatarUrl
+                  ? <AvatarImage src={avatarUrl} size={56} shape={avatarShape} />
+                  : <div style={{ width: 56, height: 56, borderRadius: "50%", background: `${previewTheme.label}33` }} />
+                }
+              </div>
+              <div style={{ fontSize: "1rem", fontWeight: 700, color: previewTheme.text, marginBottom: "0.75rem" }}>
+                {profile.display_name}
+              </div>
+              <div style={{
+                fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em",
+                color: headerColor ?? previewTheme.text, opacity: headerColor ? 1 : 0.4,
+                marginBottom: "0.5rem",
+              }}>
+                Section header
+              </div>
+              {["Sample link", "Another link"].map((text) => (
+                <div key={text} style={{
+                  background: previewTheme.card, borderRadius: 10, padding: "0.45rem 0.75rem",
+                  border: `1px solid ${previewTheme.label}28`, marginBottom: "0.35rem",
+                  fontSize: "0.8rem", fontWeight: 600, color: previewTheme.text, textAlign: "left",
+                }}>{text}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Theme */}
+          <span style={labelStyle}>Theme</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", marginBottom: "1.25rem" }}>
+            {/* Auto */}
+            <button type="button" onClick={() => setAccentColor(null)}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              <span style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 56, height: 44, borderRadius: 8,
+                background: "#fdf8f2", border: `2px solid ${accentColor === null ? "#333" : "#d1d5db"}`,
+                boxShadow: accentColor === null ? "0 0 0 3px #33333330" : "none",
+                fontSize: "0.6rem", fontWeight: 700, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase",
+                transition: "border-color 150ms, box-shadow 150ms",
+              }}>Auto</span>
+              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#666" }}>Auto</span>
+            </button>
+            {/* Presets */}
+            {Object.entries(THEME_NAMES).map(([key, name]) => {
+              const t = THEMES[key];
+              const selected = accentColor === key;
+              return (
+                <button key={key} type="button" onClick={() => { setAccentColor(key); setHeaderColor(t.label); }}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  <span style={{
+                    display: "block", width: 56, height: 44, borderRadius: 8,
+                    background: t.bg, border: `2px solid ${selected ? t.label : "#d1d5db"}`,
+                    boxShadow: selected ? `0 0 0 3px ${t.label}33` : "none",
+                    transition: "border-color 150ms, box-shadow 150ms",
+                  }} />
+                  <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#666" }}>{name}</span>
+                </button>
+              );
+            })}
+            {/* Custom */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem" }}>
+              <label title="Custom color" style={{ position: "relative", width: 56, height: 44, cursor: "pointer", display: "block" }}>
+                <span style={{
+                  display: "block", width: 56, height: 44, borderRadius: 8,
+                  background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                  border: `2px solid ${isCustomAccent ? "#333" : "#d1d5db"}`,
+                  boxShadow: isCustomAccent ? "0 0 0 3px #33333330" : "none",
+                  overflow: "hidden", position: "relative",
+                  transition: "border-color 150ms, box-shadow 150ms",
+                }}>
+                  <input type="color"
+                    value={isCustomAccent ? (accentColor ?? "#ee3666") : "#ee3666"}
+                    onChange={(e) => setAccentColor(e.target.value)}
+                    style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+                  />
+                </span>
+              </label>
+              <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#666" }}>Custom</span>
+            </div>
+          </div>
+
+          {/* Header color */}
+          <span style={labelStyle}>Section header color</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1.25rem" }}>
+            {HEADER_COLOR_PRESETS.map(({ name, color }) => {
+              const selected = headerColor === color;
+              return (
+                <button key={name} type="button" title={name} onClick={() => setHeaderColor(color)}
+                  style={{
+                    width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                    background: color === null ? "linear-gradient(135deg, #aaa 0%, #ddd 100%)" : "#fff",
+                    border: color === null ? "2px dashed #bbb" : `1.5px solid #e5e7eb`,
+                    outline: selected ? "2.5px solid #333" : "2.5px solid transparent",
+                    outlineOffset: 2, cursor: "pointer", padding: 0,
+                    color: color ?? "transparent", fontSize: "1rem", fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "outline-color 150ms",
+                  }}
+                >
+                  {color !== null && "A"}
+                </button>
+              );
+            })}
+            <label title="Custom header color" style={{ position: "relative", width: 34, height: 34, flexShrink: 0, cursor: "pointer" }}>
+              <span style={{
+                display: "block", width: 34, height: 34, borderRadius: "50%",
+                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                outline: isCustomHeader ? "2.5px solid #333" : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }} />
+              <input type="color"
+                value={isCustomHeader ? (headerColor ?? "#888888") : "#888888"}
+                onChange={(e) => setHeaderColor(e.target.value)}
+                style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              />
+            </label>
+          </div>
+
+          {/* Avatar shape */}
+          <span style={labelStyle}>Avatar shape</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1.25rem" }}>
+            {AVATAR_SHAPES.map((s) => (
+              <button key={s} type="button" title={s === "circle" ? "Circle" : `Shape ${s}`}
+                onClick={() => setAvatarShape(s)}
+                style={{
+                  width: 44, height: 44, flexShrink: 0, background: "none", border: "none",
+                  cursor: "pointer", padding: 4,
+                  outline: avatarShape === s ? "2.5px solid #333" : "2.5px solid transparent",
+                  outlineOffset: 2, borderRadius: 6, transition: "outline-color 150ms",
+                }}
+              >
+                {s === "circle"
+                  ? <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#33333333" }} />
+                  : <svg viewBox={AVATAR_BLOB_SHAPES[s].viewBox} style={{ width: 36, height: 36, display: "block" }}>
+                      <path d={AVATAR_BLOB_SHAPES[s].d} fill="#33333333" />
+                    </svg>
+                }
+              </button>
+            ))}
+          </div>
+
+          {/* Social colors toggle */}
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", marginBottom: "1.5rem" }}>
+            <input
+              type="checkbox"
+              checked={!monoSocial}
+              onChange={(e) => setMonoSocial(!e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer" }}
+            />
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#555" }}>Show social media brand colors</span>
+          </label>
+
+          {appearanceError && <p style={{ textAlign: "center" }}><strong>{appearanceError}</strong></p>}
+          {appearanceSuccess && <p style={{ textAlign: "center" }}>Appearance saved!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <BlobButton disabled={appearanceSubmitting}>Save appearance</BlobButton>
+          </p>
+        </form>
+      </div>
+
+      {/* Bio */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Bio</h2>
         <form onSubmit={handleBioSubmit}>
@@ -196,137 +388,8 @@ export default function Settings() {
           </p>
         </form>
       </div>
-      <div className="settings-card">
-        <h2 style={{ textAlign: "center" }}>Profile theme</h2>
-        <form onSubmit={handleColorSubmit}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", justifyContent: "center", padding: "0.75rem 0 1.25rem" }}>
-            {/* Auto option */}
-            {(() => {
-              const selected = accentColor === null;
-              return (
-                <button key="auto" type="button" onClick={() => { setAccentColor(null); setColorSuccess(false); }}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  <span style={{
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    width: 72, height: 56, borderRadius: 10,
-                    background: "#fdf8f2", border: `2px solid ${selected ? "#333" : "#d1d5db"}`,
-                    boxShadow: selected ? "0 0 0 3px #33333340" : "none",
-                    transition: "border-color 150ms, box-shadow 150ms",
-                    fontSize: "0.65rem", fontWeight: 700, color: "#888", letterSpacing: "0.08em", textTransform: "uppercase",
-                  }}>Auto</span>
-                  <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#555" }}>Auto</span>
-                </button>
-              );
-            })()}
-            {/* Preset themes */}
-            {Object.entries(THEME_NAMES).map(([key, name]) => {
-              const t = THEMES[key];
-              const selected = accentColor === key;
-              return (
-                <button key={key} type="button" onClick={() => { setAccentColor(key); setColorSuccess(false); }}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  <span style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-                    width: 72, height: 56, borderRadius: 10,
-                    background: t.bg, border: `2px solid ${selected ? t.label : "#d1d5db"}`,
-                    boxShadow: selected ? `0 0 0 3px ${t.label}40` : "none",
-                    transition: "border-color 150ms, box-shadow 150ms",
-                  }}>
-                    <span style={{ background: t.card, borderRadius: 5, padding: "3px 10px", fontSize: "0.6rem", fontWeight: 700, color: t.text, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>Card</span>
-                    <span style={{ fontSize: "0.6rem", fontWeight: 700, color: t.label }}>Label</span>
-                  </span>
-                  <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#555" }}>{name}</span>
-                </button>
-              );
-            })}
-            {/* Custom color picker */}
-            <button type="button" onClick={() => { if (!isCustom) { setAccentColor("#ee3666"); } setColorSuccess(false); }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", background: "none", border: "none", cursor: "pointer", padding: 0, position: "relative" }}>
-              <span style={{
-                display: "block", width: 72, height: 56, borderRadius: 10,
-                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
-                border: `2px solid ${isCustom ? "#333" : "#d1d5db"}`,
-                boxShadow: isCustom ? "0 0 0 3px #33333340" : "none",
-                overflow: "hidden", position: "relative",
-                transition: "border-color 150ms, box-shadow 150ms",
-              }}>
-                <input
-                  type="color"
-                  value={isCustom ? (accentColor ?? "#ee3666") : "#ee3666"}
-                  onChange={(e) => { setAccentColor(e.target.value); setColorSuccess(false); }}
-                  style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
-                />
-              </span>
-              <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#555" }}>Custom</span>
-            </button>
-          </div>
-          {isCustom && accentColor && (
-            <p style={{ textAlign: "center", fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
-              Selected: <span style={{ fontWeight: 700, color: accentColor }}>{accentColor}</span>
-            </p>
-          )}
-          {colorError && <p style={{ textAlign: "center" }}><strong>{colorError}</strong></p>}
-          {colorSuccess && <p style={{ textAlign: "center" }}>Theme updated!</p>}
-          <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton disabled={colorSubmitting}>Save theme</BlobButton>
-          </p>
-        </form>
-      </div>
-      <div className="settings-card">
-        <h2 style={{ textAlign: "center" }}>Header color</h2>
-        <form onSubmit={handleHeaderColorSubmit}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", justifyContent: "center", padding: "0.75rem 0 1.25rem" }}>
-            {HEADER_COLOR_PRESETS.map(({ name, color }) => {
-              const selected = headerColor === color;
-              return (
-                <button key={name} type="button" onClick={() => { setHeaderColor(color); setHeaderColorSuccess(false); }}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  <span style={{
-                    display: "block", width: 40, height: 40, borderRadius: "50%",
-                    background: color ?? "linear-gradient(135deg, #aaa 0%, #ddd 100%)",
-                    border: color === null ? "2px dashed #bbb" : "2px solid transparent",
-                    outline: selected ? "2.5px solid #333" : "2.5px solid transparent",
-                    outlineOffset: 2,
-                    boxShadow: selected ? "0 0 0 4px #33333320" : "0 0 0 1px #e5e7eb",
-                    transition: "outline-color 150ms, box-shadow 150ms",
-                  }} />
-                  <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#555" }}>{name}</span>
-                </button>
-              );
-            })}
-            <button type="button" onClick={() => { if (!isCustomHeader) setHeaderColor("#888888"); setHeaderColorSuccess(false); }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem", background: "none", border: "none", cursor: "pointer", padding: 0, position: "relative" }}>
-              <span style={{
-                display: "block", width: 40, height: 40, borderRadius: "50%",
-                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
-                outline: isCustomHeader ? "2.5px solid #333" : "2.5px solid transparent",
-                outlineOffset: 2,
-                boxShadow: isCustomHeader ? "0 0 0 4px #33333320" : "0 0 0 1px #e5e7eb",
-                overflow: "hidden", position: "relative",
-                transition: "outline-color 150ms, box-shadow 150ms",
-              }}>
-                <input
-                  type="color"
-                  value={isCustomHeader ? (headerColor ?? "#888888") : "#888888"}
-                  onChange={(e) => { setHeaderColor(e.target.value); setHeaderColorSuccess(false); }}
-                  style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
-                />
-              </span>
-              <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#555" }}>Custom</span>
-            </button>
-          </div>
-          {isCustomHeader && headerColor && (
-            <p style={{ textAlign: "center", fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
-              Selected: <span style={{ fontWeight: 700, color: headerColor }}>{headerColor}</span>
-            </p>
-          )}
-          {headerColorError && <p style={{ textAlign: "center" }}><strong>{headerColorError}</strong></p>}
-          {headerColorSuccess && <p style={{ textAlign: "center" }}>Header color updated!</p>}
-          <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="B" disabled={headerColorSubmitting}>Save header color</BlobButton>
-          </p>
-        </form>
-      </div>
+
+      {/* Categories */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Categories</h2>
         <form onSubmit={handleCategorySubmit}>
@@ -339,22 +402,15 @@ export default function Settings() {
               const color = colors[i];
               return (
                 <label key={value} style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  cursor: "pointer",
-                  padding: paddings[i],
-                  borderRadius: 100,
+                  display: "inline-flex", alignItems: "center", cursor: "pointer",
+                  padding: paddings[i], borderRadius: 100,
                   border: `2px solid ${color}`,
                   background: selected ? color : "transparent",
                   color: selected ? "#fff" : color,
-                  fontWeight: 700,
-                  fontSize: "1rem",
-                  letterSpacing: "0.07em",
-                  textTransform: "uppercase",
+                  fontWeight: 700, fontSize: "1rem", letterSpacing: "0.07em", textTransform: "uppercase",
                   transform: `rotate(${rotations[i]})`,
                   transition: "background 150ms ease, color 150ms ease",
-                  userSelect: "none",
-                  fontFamily: "'Aladin', Georgia, serif",
+                  userSelect: "none", fontFamily: "'Aladin', Georgia, serif",
                 }}>
                   <input type="checkbox" checked={selected} onChange={() => toggleCategory(value)} style={{ display: "none" }} />
                   {label}
@@ -369,6 +425,8 @@ export default function Settings() {
           </p>
         </form>
       </div>
+
+      {/* Username */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Change username</h2>
         <p style={{ textAlign: "center", marginTop: 0 }}>Current: <strong>{profile.username}</strong></p>
@@ -378,9 +436,7 @@ export default function Settings() {
             <input
               type="text"
               value={username}
-              onChange={(e) =>
-                setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))
-              }
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
               required
             />
           </label>
