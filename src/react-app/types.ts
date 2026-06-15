@@ -33,21 +33,21 @@ export type ProfileTheme = {
 };
 
 export const THEMES: Record<string, ProfileTheme> = {
-  derby:     { bg: "#f5aaaa", card: "#ffffff", text: "#2d0808", label: "#c8102e" },
   bluegrass: { bg: "#8ecfaa", card: "#ffffff", text: "#071a0e", label: "#1a6635" },
   river:     { bg: "#8ab8e8", card: "#ffffff", text: "#081428", label: "#1a4fd6" },
   bourbon:   { bg: "#f5a030", card: "#fffdf0", text: "#2c1800", label: "#8a4500" },
-  lilac:     { bg: "#c898e8", card: "#ffffff", text: "#180828", label: "#6b20e0" },
   midnight:  { bg: "#0f1629", card: "#1a2744", text: "#e2eaf8", label: "#93b4f0" },
+  mono:      { bg: "#f0f0f0", card: "#ffffff", text: "#111111", label: "#111111" },
+  terminal:  { bg: "#0a0e08", card: "#111a0f", text: "#39ff14", label: "#39ff14" },
 };
 
 export const THEME_NAMES: Record<string, string> = {
-  derby: "Derby",
   bluegrass: "Bluegrass",
   river: "River",
   bourbon: "Bourbon",
-  lilac: "Lilac",
   midnight: "Midnight",
+  mono: "Mono",
+  terminal: "Terminal",
 };
 
 export const AVATAR_SHAPES = ["circle", "A", "B", "C"] as const;
