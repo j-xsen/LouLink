@@ -460,13 +460,14 @@ function escHtml(s: string): string {
 app.get("/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   const assetResp = await c.env.ASSETS.fetch(c.req.raw);
-  if (!USERNAME_RE.test(username)) return assetResp;
+  const mutableAsset = () => new Response(assetResp.body, { status: assetResp.status, statusText: assetResp.statusText, headers: new Headers(assetResp.headers) });
+  if (!USERNAME_RE.test(username)) return mutableAsset();
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
     SELECT display_name, bio FROM public.profiles WHERE username = ${username}
   `;
-  if (!profile) return assetResp;
+  if (!profile) return mutableAsset();
 
   const displayName = profile.display_name as string;
   const rawBio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
@@ -497,6 +498,11 @@ app.get("/:username", async (c) => {
 });
 
 // Catch-all: serve static assets (JS, CSS, fonts, etc.) with SPA fallback.
-app.get("*", async (c) => c.env.ASSETS.fetch(c.req.raw));
+// Wrap in new Response so secureHeaders() can mutate headers if an /api/* path
+// somehow falls through to here (immutable ASSETS headers would throw otherwise).
+app.get("*", async (c) => {
+  const resp = await c.env.ASSETS.fetch(c.req.raw);
+  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: new Headers(resp.headers) });
+});
 
 export default app;
