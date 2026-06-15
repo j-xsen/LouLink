@@ -20,6 +20,13 @@ function avatarUrl(assetId: string | null): string | null {
   return `https://loul.ink/avatars/${assetId}`;
 }
 
+async function bustProfileCache(origin: string, username: string): Promise<void> {
+  await Promise.allSettled([
+    caches.default.delete(`${origin}/api/profile/${username}`),
+    caches.default.delete(`${origin}/api/directory`),
+  ]);
+}
+
 const app = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
 app.use("/api/*", secureHeaders());
@@ -176,6 +183,8 @@ app.put("/api/me/links", requireAuth, async (c) => {
       `;
     }
   }
+  const [linkRow] = await sql`SELECT username FROM public.profiles WHERE user_id = ${userId}`;
+  if (linkRow) await bustProfileCache(new URL(c.req.url).origin, linkRow.username as string);
   return c.json({ ok: true });
 });
 
@@ -194,6 +203,7 @@ app.put("/api/me/categories", requireAuth, async (c) => {
     RETURNING username, display_name, categories
   `;
   if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
   return c.json({ profile });
 });
 
@@ -208,6 +218,7 @@ app.put("/api/me/bio", requireAuth, async (c) => {
     RETURNING username, display_name, bio
   `;
   if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
   return c.json({ profile });
 });
 
@@ -232,6 +243,7 @@ app.put("/api/me/social-links", requireAuth, async (c) => {
     RETURNING username, display_name, social_links
   `;
   if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
   return c.json({ profile });
 });
 
@@ -248,6 +260,8 @@ app.put("/api/me/username", requireAuth, async (c) => {
   }
 
   const sql = createDb(c.env.DATABASE_URL);
+  const [oldRow] = await sql`SELECT username FROM public.profiles WHERE user_id = ${userId}`;
+  const oldUsername = oldRow?.username as string | undefined;
   try {
     const [profile] = await sql`
       UPDATE public.profiles SET username = ${username}, updated_at = now()
@@ -255,6 +269,12 @@ app.put("/api/me/username", requireAuth, async (c) => {
       RETURNING username, display_name
     `;
     if (!profile) return c.json({ error: "Profile not found" }, 404);
+    const origin = new URL(c.req.url).origin;
+    await Promise.allSettled([
+      oldUsername ? caches.default.delete(`${origin}/api/profile/${oldUsername}`) : Promise.resolve(),
+      caches.default.delete(`${origin}/api/profile/${username}`),
+      caches.default.delete(`${origin}/api/directory`),
+    ]);
     return c.json({ profile });
   } catch (e) {
     if ((e as { code?: string }).code === "23505") {
@@ -277,7 +297,7 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
     return c.json({ error: "File exceeds 5 MB limit" }, 413);
   }
   const sql = createDb(c.env.DATABASE_URL);
-  const [existing] = await sql`SELECT avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
+  const [existing] = await sql`SELECT username, avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
   if (!existing) return c.json({ error: "Profile not found" }, 404);
   const oldKey: string | null = (existing.avatar_asset_id as string | null) ?? null;
   const ext = mimeToExt(mimeType);
@@ -287,6 +307,7 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (oldKey && oldKey !== newKey) {
     await c.env.AVATAR_BUCKET.delete(oldKey);
   }
+  await bustProfileCache(new URL(c.req.url).origin, existing.username as string);
   return c.json({ avatarUrl: avatarUrl(newKey) });
 });
 
@@ -302,6 +323,10 @@ app.get("/api/username/:username/available", async (c) => {
 app.get("/api/profile/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
+
+  const cacheKey = new URL(c.req.url).origin + `/api/profile/${username}`;
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return cached;
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
@@ -319,7 +344,12 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
-  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
+  const body = JSON.stringify({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
+  const res = new Response(body, {
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0" },
+  });
+  await caches.default.put(cacheKey, res.clone());
+  return res;
 });
 
 app.get("/avatars/*", async (c) => {
@@ -385,6 +415,10 @@ app.get("/api/og", async (c) => {
 });
 
 app.get("/api/directory", async (c) => {
+  const cacheKey = new URL(c.req.url).origin + "/api/directory";
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return cached;
+
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
     SELECT username, display_name, bio, categories, avatar_asset_id
@@ -396,22 +430,11 @@ app.get("/api/directory", async (c) => {
     ...p,
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
-  return c.json(members);
-});
-
-// TEMPORARY: purge all URLs we cached during the broken caching experiments.
-// Delete this route after hitting it once.
-app.get("/api/cache-nuke", async (c) => {
-  const origin = new URL(c.req.url).origin;
-  const urls = [
-    `${origin}/api/directory`,
-    `${origin}/api/profile/jaxsen`,
-  ];
-  const results: Record<string, boolean> = {};
-  for (const url of urls) {
-    try { results[url] = await caches.default.delete(url); } catch { results[url] = false; }
-  }
-  return c.json({ purged: results });
+  const res = new Response(JSON.stringify(members), {
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0" },
+  });
+  await caches.default.put(cacheKey, res.clone());
+  return res;
 });
 
 // Unknown /api/* routes — return 404 instead of falling through to ASSETS,
