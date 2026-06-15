@@ -8,7 +8,7 @@ import { getCached, setCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
-import { CATEGORY_LABELS } from "../types";
+import { CATEGORY_LABELS, THEMES, type ProfileTheme } from "../types";
 
 type PublicItem =
   | { kind: "link"; title: string; url: string; icon?: string }
@@ -21,7 +21,15 @@ type PublicProfile = {
   verified: boolean;
   avatarUrl: string | null;
   social_links: Record<string, string>;
+  accent_color: string | null;
 };
+
+function toPastel(hex: string, mix = 0.22): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${Math.round(r * mix + 255 * (1 - mix))}, ${Math.round(g * mix + 255 * (1 - mix))}, ${Math.round(b * mix + 255 * (1 - mix))})`;
+}
 
 function getFaviconUrl(url: string): string {
   try {
@@ -30,6 +38,20 @@ function getFaviconUrl(url: string): string {
   } catch {
     return "";
   }
+}
+
+function resolveTheme(accentColor: string | null | undefined, items: PublicItem[]): ProfileTheme {
+  if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
+  if (accentColor && accentColor.startsWith("#")) {
+    return { bg: toPastel(accentColor), card: "#ffffff", text: "#111111", label: accentColor };
+  }
+  const iconColor = (() => {
+    for (const item of items) {
+      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) return BRAND_COLORS[item.icon];
+    }
+    return "#6b7280";
+  })();
+  return { bg: "#fdf8f2", card: "#ffffff", text: "#111111", label: iconColor };
 }
 
 export default function ProfilePage() {
@@ -88,15 +110,19 @@ export default function ProfilePage() {
     });
   }, [items]);
 
-  // Accent color: first brand icon's color, fallback neutral
-  const accentColor = (() => {
-    for (const item of items) {
-      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) {
-        return BRAND_COLORS[item.icon];
-      }
-    }
-    return "#6b7280";
-  })();
+  const theme = resolveTheme(profile?.accent_color, items);
+
+  useEffect(() => {
+    if (!profile) return;
+    const prevBody = document.body.style.background;
+    const prevHtml = document.documentElement.style.background;
+    document.body.style.background = theme.bg;
+    document.documentElement.style.background = theme.bg;
+    return () => {
+      document.body.style.background = prevBody;
+      document.documentElement.style.background = prevHtml;
+    };
+  }, [theme.bg, profile]);
 
   if (status === "loading") return <p>Loading…</p>;
   if (status === "not-found" || !profile) {
@@ -112,7 +138,7 @@ export default function ProfilePage() {
   const linkItems = items.filter((it) => it.kind === "link");
 
   return (
-    <div style={{ paddingBottom: "4rem" }}>
+    <div style={{ paddingBottom: "4rem", color: theme.text, "--accent": theme.label } as React.CSSProperties & { "--accent": string }}>
       {/* Profile header */}
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
         {profile.avatarUrl && (
@@ -120,14 +146,14 @@ export default function ProfilePage() {
             <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} />
           </div>
         )}
-        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
+        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text }}>
           {profile.display_name}
           {profile.verified && (
-            <span style={{ color: accentColor, fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
+            <span style={{ color: theme.label, fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
           )}
         </h1>
         {profile.bio && (
-          <p style={{ color: "#555", margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
+          <p style={{ color: theme.text, opacity: 0.65, margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
             {profile.bio}
           </p>
         )}
@@ -140,8 +166,8 @@ export default function ProfilePage() {
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                color: accentColor,
-                background: `${accentColor}18`,
+                color: theme.label,
+                background: `${theme.label}22`,
                 borderRadius: 20,
                 padding: "3px 10px",
               }}>
@@ -180,7 +206,7 @@ export default function ProfilePage() {
 
       {/* Items */}
       {linkItems.length === 0 ? (
-        <p style={{ textAlign: "center", color: "#9ca3af" }}>No links yet.</p>
+        <p style={{ textAlign: "center", opacity: 0.5 }}>No links yet.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {items.map((item, i) => {
@@ -192,7 +218,8 @@ export default function ProfilePage() {
                     fontSize: "0.7rem",
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
-                    color: "#9ca3af",
+                    color: theme.text,
+                    opacity: 0.4,
                   }}>
                     {item.title}
                   </span>
@@ -209,7 +236,7 @@ export default function ProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-card"
-                style={{ "--accent": accentColor } as React.CSSProperties & { "--accent": string }}
+                style={{ background: theme.card, color: theme.text, borderColor: `${theme.label}28` }}
               >
                 {ogImage && (
                   <img
@@ -218,12 +245,10 @@ export default function ProfilePage() {
                     onError={(e) => { e.currentTarget.style.display = "none"; }}
                     style={{
                       alignSelf: "stretch",
-                      marginTop: "-0.875rem",
-                      marginBottom: "-0.875rem",
-                      marginLeft: "-1.25rem",
-                      width: 80,
+                      marginLeft: "calc(-1rem + 0.65rem)",
+                      width: 110,
                       flexShrink: 0,
-                      borderRadius: "12px 0 0 12px",
+                      borderRadius: "10px",
                       objectFit: "cover",
                     }}
                   />
@@ -250,7 +275,7 @@ export default function ProfilePage() {
           to="/"
           style={{
             fontSize: "0.75rem",
-            color: accentColor,
+            color: theme.label,
             textDecoration: "none",
             fontFamily: "Georgia, serif",
             letterSpacing: "0.03em",

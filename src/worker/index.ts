@@ -85,7 +85,7 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links
+    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links, accent_color
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
@@ -211,6 +211,24 @@ app.put("/api/me/bio", requireAuth, async (c) => {
   return c.json({ profile });
 });
 
+app.put("/api/me/accent", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ accent_color?: unknown }>(c);
+  const raw = body?.accent_color;
+  const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+  const VALID_THEMES = new Set(["derby", "bluegrass", "river", "bourbon", "lilac", "midnight"]);
+  const value = typeof raw === "string" ? raw.trim() : null;
+  const color = value && (HEX_RE.test(value) || VALID_THEMES.has(value)) ? value : null;
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET accent_color = ${color}, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username, accent_color
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  return c.json({ profile });
+});
+
 app.put("/api/me/social-links", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ social_links?: unknown }>(c);
@@ -305,7 +323,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id, p.social_links
+    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id, p.social_links, p.accent_color
     FROM public.profiles p
     WHERE p.username = ${username}
   `;
