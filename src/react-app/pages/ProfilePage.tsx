@@ -44,6 +44,7 @@ export default function ProfilePage() {
     ) : []
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
+  const [ogImages, setOgImages] = useState<Record<string, string>>({});
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
   });
@@ -65,6 +66,27 @@ export default function ProfilePage() {
       })
       .catch(() => setStatus("not-found"));
   }, [username]);
+
+  useEffect(() => {
+    const linkUrls = items
+      .filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link")
+      .map((it) => it.url);
+    if (linkUrls.length === 0) return;
+    Promise.all(
+      linkUrls.map((url) =>
+        fetch(`/api/og?url=${encodeURIComponent(url)}`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((d: { ogImage: string | null } | null) => ({ url, ogImage: d?.ogImage ?? null }))
+          .catch(() => ({ url, ogImage: null }))
+      )
+    ).then((results) => {
+      const map: Record<string, string> = {};
+      for (const { url, ogImage } of results) {
+        if (ogImage) map[url] = ogImage;
+      }
+      setOgImages(map);
+    });
+  }, [items]);
 
   // Accent color: first brand icon's color, fallback neutral
   const accentColor = (() => {
@@ -178,7 +200,8 @@ export default function ProfilePage() {
               );
             }
             const iconColor = item.icon ? BRAND_COLORS[item.icon] : undefined;
-            const faviconUrl = getFaviconUrl(item.url);
+            const ogImage = ogImages[item.url];
+            const faviconUrl = !ogImage ? getFaviconUrl(item.url) : "";
             return (
               <a
                 key={i}
@@ -188,6 +211,23 @@ export default function ProfilePage() {
                 className="link-card"
                 style={{ "--accent": accentColor } as React.CSSProperties & { "--accent": string }}
               >
+                {ogImage && (
+                  <img
+                    src={ogImage}
+                    alt=""
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    style={{
+                      alignSelf: "stretch",
+                      marginTop: "-0.875rem",
+                      marginBottom: "-0.875rem",
+                      marginLeft: "-1.25rem",
+                      width: 80,
+                      flexShrink: 0,
+                      borderRadius: "12px 0 0 12px",
+                      objectFit: "cover",
+                    }}
+                  />
+                )}
                 {item.icon && <Icon name={item.icon} size={20} color={iconColor} />}
                 <span style={{ flex: 1 }}>{item.title}</span>
                 {faviconUrl && (
