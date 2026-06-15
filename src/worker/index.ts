@@ -356,7 +356,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const cacheKey = new URL(c.req.url).origin + `/api/profile/${username}`;
   const cached = await caches.default.match(cacheKey);
-  if (cached) return cached;
+  if (cached) return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) });
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
@@ -447,7 +447,7 @@ app.get("/api/og", async (c) => {
 app.get("/api/directory", async (c) => {
   const cacheKey = new URL(c.req.url).origin + "/api/directory";
   const cached = await caches.default.match(cacheKey);
-  if (cached) return cached;
+  if (cached) return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) });
 
   const sql = createDb(c.env.DATABASE_URL);
   const rows = await sql`
