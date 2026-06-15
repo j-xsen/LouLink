@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useId, useRef, useState } from "react";
-import { BLOB_SHAPES } from "./ui";
+import { AVATAR_BLOB_SHAPES } from "./ui";
 import type { AvatarShape } from "../types";
 
 export const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -13,7 +13,7 @@ export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "
   const uid = useId().replace(/:/g, "");
   if (!src) return null;
   if (shape !== "circle") {
-    const { viewBox, d } = BLOB_SHAPES[shape as keyof typeof BLOB_SHAPES];
+    const { viewBox, d } = AVATAR_BLOB_SHAPES[shape];
     const [, , w, h] = viewBox.split(" ").map(Number);
     const clipId = `avatar-clip-${uid}`;
     return (

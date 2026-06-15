@@ -50,7 +50,7 @@ export const THEME_NAMES: Record<string, string> = {
   terminal: "Terminal",
 };
 
-export const AVATAR_SHAPES = ["circle", "A", "B", "C"] as const;
+export const AVATAR_SHAPES = ["circle", "1", "2", "5", "6", "7"] as const;
 export type AvatarShape = typeof AVATAR_SHAPES[number];
 
 // accent_color column stores "themeKeyOrHex|headerHex|mono|shape" — any part may be empty/absent

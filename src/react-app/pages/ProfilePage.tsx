@@ -9,7 +9,7 @@ import { useSeo } from "../lib/seo";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
-import { BLOB_SHAPES } from "../components/ui";
+import { AVATAR_BLOB_SHAPES } from "../components/ui";
 import { useAuth } from "../auth";
 
 type PublicItem =
@@ -506,8 +506,8 @@ export default function ProfilePage() {
                 {s === "circle" ? (
                   <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${theme.label}99` }} />
                 ) : (
-                  <svg viewBox={BLOB_SHAPES[s as keyof typeof BLOB_SHAPES].viewBox} style={{ width: 30, height: 30, display: "block" }}>
-                    <path d={BLOB_SHAPES[s as keyof typeof BLOB_SHAPES].d} fill={`${theme.label}99`} />
+                  <svg viewBox={AVATAR_BLOB_SHAPES[s].viewBox} style={{ width: 30, height: 30, display: "block" }}>
+                    <path d={AVATAR_BLOB_SHAPES[s].d} fill={`${theme.label}99`} />
                   </svg>
                 )}
               </button>
