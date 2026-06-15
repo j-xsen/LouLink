@@ -12,8 +12,8 @@ import { ShapeButton } from "../components/ui";
 import { GroupedDirectory } from "../components/Directory";
 import type { DirectoryMember } from "../types";
 import logoFullColor from "../assets/logo-full-color.svg";
-import shape1 from "../assets/shape-1.svg";
-import shape2 from "../assets/shape-2.svg";
+const shape1 = "/shapes/shape-1.svg";
+const shape2 = "/shapes/shape-2.svg";
 
 export default function Dashboard() {
   const { profile, signOut } = useAuth();

@@ -7,7 +7,7 @@ import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
-import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
+import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 import { AvatarImage } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
 
@@ -339,9 +339,7 @@ export default function Settings() {
               >
                 {s === "circle"
                   ? <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#33333333" }} />
-                  : <svg viewBox={AVATAR_BLOB_SHAPES[s].viewBox} style={{ width: 36, height: 36, display: "block" }}>
-                      <path d={AVATAR_BLOB_SHAPES[s].d} fill="#33333333" />
-                    </svg>
+                  : <div style={{ width: 36, height: 36, background: "#33333333", WebkitMaskImage: `url(/shapes/shape-${s}.svg)`, maskImage: `url(/shapes/shape-${s}.svg)`, WebkitMaskSize: "contain", maskSize: "contain", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat", WebkitMaskPosition: "center", maskPosition: "center" }} />
                 }
               </button>
             ))}

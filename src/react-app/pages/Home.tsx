@@ -11,9 +11,9 @@ import { ShapeButton } from "../components/ui";
 import { GroupedDirectory } from "../components/Directory";
 import type { DirectoryMember } from "../types";
 import logoFullColor from "../assets/logo-full-color.svg";
-import shape1 from "../assets/shape-1.svg";
-import shape3 from "../assets/shape-3.svg";
-import shape4 from "../assets/shape-4.svg";
+const shape1 = "/shapes/shape-1.svg";
+const shape3 = "/shapes/shape-3.svg";
+const shape4 = "/shapes/shape-4.svg";
 
 export default function Home() {
   const { session } = useAuth();

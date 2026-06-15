@@ -2,33 +2,26 @@
 // Avatar components
 // ---------------------------------------------------------------------------
 
-import { useId, useRef, useState } from "react";
-import { AVATAR_BLOB_SHAPES } from "./ui";
+import { useRef, useState } from "react";
 import type { AvatarShape } from "../types";
 
 export const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export const MAX_AVATAR_BYTES_CLIENT = 5 * 1024 * 1024;
 
 export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "circle" }: { src: string | null; size?: number; alt?: string; shape?: AvatarShape }) {
-  const uid = useId().replace(/:/g, "");
   if (!src) return null;
-  if (shape !== "circle") {
-    const { viewBox, d } = AVATAR_BLOB_SHAPES[shape];
-    const [, , w, h] = viewBox.split(" ").map(Number);
-    const clipId = `avatar-clip-${uid}`;
-    return (
-      <svg width={size} height={size} viewBox={viewBox} role="img" aria-label={alt} style={{ display: "block" }}>
-        <defs>
-          <clipPath id={clipId}>
-            <path d={d} />
-          </clipPath>
-        </defs>
-        <image href={src} x="0" y="0" width={w} height={h} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
-      </svg>
-    );
-  }
+  const maskStyle: React.CSSProperties = shape !== "circle" ? {
+    WebkitMaskImage: `url(/shapes/shape-${shape}.svg)`,
+    maskImage: `url(/shapes/shape-${shape}.svg)`,
+    WebkitMaskSize: "cover",
+    maskSize: "cover",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+  } : { borderRadius: "50%" };
   return (
-    <img src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+    <img src={src} alt={alt} style={{ width: size, height: size, objectFit: "cover", display: "block", ...maskStyle }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
   );
 }
 
