@@ -377,7 +377,7 @@ export default function ProfilePage() {
               key={key}
               type="button"
               title={THEME_NAMES[key]}
-              onClick={() => { setPendingKey(key); setThemeSaved(false); }}
+              onClick={() => { setPendingKey(key); setPendingHeader(t.label); setThemeSaved(false); }}
               style={{
                 width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
                 background: t.bg,
