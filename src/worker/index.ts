@@ -92,7 +92,7 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links
+    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links, accent_color
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
@@ -222,6 +222,36 @@ app.put("/api/me/bio", requireAuth, async (c) => {
   return c.json({ profile });
 });
 
+app.put("/api/me/accent", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown }>(c);
+  const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+  const VALID_THEMES = new Set(["bluegrass", "river", "bourbon", "midnight", "ink", "terminal"]);
+  const VALID_SHAPES = new Set(["circle", "1", "5", "6", "7"]);
+  const rawTheme = typeof body?.accent_color === "string" ? body.accent_color.trim() : null;
+  const rawHeader = typeof body?.header_color === "string" ? body.header_color.trim() : null;
+  const rawShape = typeof body?.avatar_shape === "string" ? body.avatar_shape.trim() : "circle";
+  const monoSocial = body?.mono_social === true;
+  const themeKey = rawTheme && (HEX_RE.test(rawTheme) || VALID_THEMES.has(rawTheme)) ? rawTheme : null;
+  const headerColor = rawHeader && HEX_RE.test(rawHeader) ? rawHeader : null;
+  const avatarShape = VALID_SHAPES.has(rawShape) ? rawShape : "circle";
+  const monoPart = monoSocial ? "mono" : "";
+  const shapePart = avatarShape !== "circle" ? avatarShape : "";
+  const stored = !themeKey && !headerColor && !monoPart && !shapePart ? null
+    : shapePart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}`
+    : monoPart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}`
+    : headerColor ? `${themeKey ?? ""}|${headerColor}`
+    : themeKey;
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET accent_color = ${stored}, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username, accent_color
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  return c.json({ profile });
+});
+
 app.put("/api/me/social-links", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ social_links?: unknown }>(c);
@@ -330,7 +360,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id, p.social_links
+    SELECT p.username, p.display_name, p.bio, p.categories, p.verified, p.avatar_asset_id, p.social_links, p.accent_color
     FROM public.profiles p
     WHERE p.username = ${username}
   `;

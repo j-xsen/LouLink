@@ -2,22 +2,28 @@
 // Avatar components
 // ---------------------------------------------------------------------------
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { AVATAR_BLOB_SHAPES } from "./ui";
+import type { AvatarShape } from "../types";
 
 export const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export const MAX_AVATAR_BYTES_CLIENT = 5 * 1024 * 1024;
 
-export function AvatarImage({ src, size = 64, alt = "Profile picture", blobClip = false }: { src: string | null; size?: number; alt?: string; blobClip?: boolean }) {
+export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "circle" }: { src: string | null; size?: number; alt?: string; shape?: AvatarShape }) {
+  const uid = useId().replace(/:/g, "");
   if (!src) return null;
-  if (blobClip) {
+  if (shape !== "circle") {
+    const { viewBox, d } = AVATAR_BLOB_SHAPES[shape];
+    const [, , w, h] = viewBox.split(" ").map(Number);
+    const clipId = `avatar-clip-${uid}`;
     return (
-      <svg width={size} height={size} viewBox="0 0 677.19 598.14" role="img" aria-label={alt} style={{ display: "block" }}>
+      <svg width={size} height={size} viewBox={viewBox} role="img" aria-label={alt} style={{ display: "block" }}>
         <defs>
-          <clipPath id="avatar-blob-clip">
-            <path d="M39.5,543.53C-48.8,446.41,16,180.46,183.5,63.53c22.79-15.91,113.18-79.01,228-60,158.66,26.26,281.67,195.65,264,320-31.3,220.22-512.01,356.38-636,220Z" />
+          <clipPath id={clipId}>
+            <path d={d} />
           </clipPath>
         </defs>
-        <image href={src} x="0" y="0" width="677.19" height="598.14" preserveAspectRatio="xMidYMid slice" clipPath="url(#avatar-blob-clip)" />
+        <image href={src} x="0" y="0" width={w} height={h} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
       </svg>
     );
   }
@@ -79,7 +85,7 @@ export function AvatarUpload({
     <div style={{ textAlign: "center" }}>
       {preview && (
         <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}>
-          <AvatarImage src={preview} size={110} alt="Profile picture preview" blobClip />
+          <AvatarImage src={preview} size={110} alt="Profile picture preview" />
         </div>
       )}
       <input

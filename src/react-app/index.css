@@ -65,7 +65,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.875rem 1.25rem;
+  padding: 0.65rem 1rem;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;

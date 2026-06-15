@@ -2,13 +2,15 @@
 // Public profile page
 // ---------------------------------------------------------------------------
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getCached, setCached } from "../lib/cache";
+import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
-import { CATEGORY_LABELS } from "../types";
+import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
+import { AVATAR_BLOB_SHAPES } from "../components/ui";
+import { useAuth } from "../auth";
 
 type PublicItem =
   | { kind: "link"; title: string; url: string; icon?: string }
@@ -21,7 +23,15 @@ type PublicProfile = {
   verified: boolean;
   avatarUrl: string | null;
   social_links: Record<string, string>;
+  accent_color: string | null;
 };
+
+function toPastel(hex: string, mix = 0.22): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${Math.round(r * mix + 255 * (1 - mix))}, ${Math.round(g * mix + 255 * (1 - mix))}, ${Math.round(b * mix + 255 * (1 - mix))})`;
+}
 
 function getFaviconUrl(url: string): string {
   try {
@@ -32,8 +42,23 @@ function getFaviconUrl(url: string): string {
   }
 }
 
+function resolveTheme(accentColor: string | null | undefined, items: PublicItem[]): ProfileTheme {
+  if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
+  if (accentColor && accentColor.startsWith("#")) {
+    return { bg: toPastel(accentColor), card: "#ffffff", text: "#111111", label: accentColor };
+  }
+  const iconColor = (() => {
+    for (const item of items) {
+      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) return BRAND_COLORS[item.icon];
+    }
+    return "#6b7280";
+  })();
+  return { bg: "#fdf8f2", card: "#ffffff", text: "#111111", label: iconColor };
+}
+
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const { session, profile: authProfile } = useAuth();
   const cacheKey = `/api/profile/${username}`;
   const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey);
   const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
@@ -45,6 +70,18 @@ export default function ProfilePage() {
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
   const [ogImages, setOgImages] = useState<Record<string, string>>({});
+
+  // Pending theme key for owner preview before saving
+  const themeInitialized = useRef(false);
+  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono, avatarShape: cachedShape } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
+  const [pendingKey, setPendingKey] = useState<string | null>(cachedTheme);
+  const [pendingHeader, setPendingHeader] = useState<string | null>(cachedHeader);
+  const [pendingMono, setPendingMono] = useState<boolean>(cachedMono);
+  const [pendingShape, setPendingShape] = useState<AvatarShape>(cachedShape);
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [themeSaved, setThemeSaved] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(true);
+
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
   });
@@ -63,9 +100,29 @@ export default function ProfilePage() {
           : { kind: "link", title: l.title, url: l.url, icon: l.icon ?? undefined }
         ));
         setStatus("found");
+        if (!themeInitialized.current) {
+          themeInitialized.current = true;
+          const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(d.profile.accent_color ?? null);
+          setPendingKey(themeKey);
+          setPendingHeader(headerColor);
+          setPendingMono(monoSocial);
+          setPendingShape(avatarShape);
+        }
       })
       .catch(() => setStatus("not-found"));
   }, [username]);
+
+  // Sync pendingKey once when cached profile is used
+  useEffect(() => {
+    if (profile && !themeInitialized.current) {
+      themeInitialized.current = true;
+      const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(profile.accent_color ?? null);
+      setPendingKey(themeKey);
+      setPendingHeader(headerColor);
+      setPendingMono(monoSocial);
+      setPendingShape(avatarShape);
+    }
+  }, [profile]);
 
   useEffect(() => {
     const linkUrls = items
@@ -88,15 +145,40 @@ export default function ProfilePage() {
     });
   }, [items]);
 
-  // Accent color: first brand icon's color, fallback neutral
-  const accentColor = (() => {
-    for (const item of items) {
-      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) {
-        return BRAND_COLORS[item.icon];
-      }
+  const isOwner = !!authProfile && authProfile.username === username;
+  const theme = resolveTheme(pendingKey, items);
+  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape } = parseAccentColor(profile?.accent_color ?? null);
+  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape;
+
+  useEffect(() => {
+    if (!profile) return;
+    const prevBody = document.body.style.background;
+    const prevHtml = document.documentElement.style.background;
+    document.body.style.background = theme.bg;
+    document.documentElement.style.background = theme.bg;
+    return () => {
+      document.body.style.background = prevBody;
+      document.documentElement.style.background = prevHtml;
+    };
+  }, [theme.bg, profile]);
+
+  async function handleSaveTheme() {
+    if (!session || !profile || themeSaving) return;
+    setThemeSaving(true);
+    const res = await fetch("/api/me/accent", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono, avatar_shape: pendingShape }),
+    });
+    setThemeSaving(false);
+    if (res.ok) {
+      const d = await res.json();
+      setProfile((p) => p ? { ...p, accent_color: d.profile.accent_color } : p);
+      deleteCached(cacheKey);
+      setThemeSaved(true);
+      setTimeout(() => setThemeSaved(false), 2000);
     }
-    return "#6b7280";
-  })();
+  }
 
   if (status === "loading") return <p>Loading…</p>;
   if (status === "not-found" || !profile) {
@@ -112,22 +194,31 @@ export default function ProfilePage() {
   const linkItems = items.filter((it) => it.kind === "link");
 
   return (
-    <div style={{ paddingBottom: "4rem" }}>
+    <div style={{ paddingBottom: isOwner ? "8rem" : "4rem", color: theme.text, "--accent": theme.label } as React.CSSProperties & { "--accent": string }}>
       {/* Profile header */}
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
         {profile.avatarUrl && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-            <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} />
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+              {profile.verified && (
+                <span title="Verified Louisville" style={{
+                  position: "absolute", bottom: 2, right: 2,
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: theme.label, color: theme.card,
+                  fontSize: "0.65rem", fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: `0 0 0 2px ${theme.bg}`,
+                }}>✓</span>
+              )}
+            </div>
           </div>
         )}
-        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em" }}>
+        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text }}>
           {profile.display_name}
-          {profile.verified && (
-            <span style={{ color: accentColor, fontSize: "1rem", marginLeft: 6 }} title="Verified Louisville">✓</span>
-          )}
         </h1>
         {profile.bio && (
-          <p style={{ color: "#555", margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
+          <p style={{ color: theme.text, opacity: 0.65, margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
             {profile.bio}
           </p>
         )}
@@ -140,8 +231,8 @@ export default function ProfilePage() {
                 fontWeight: 600,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                color: accentColor,
-                background: `${accentColor}18`,
+                color: theme.label,
+                background: `${theme.label}22`,
                 borderRadius: 20,
                 padding: "3px 10px",
               }}>
@@ -154,7 +245,7 @@ export default function ProfilePage() {
           <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
             {Object.entries(profile.social_links).map(([platform, url]) => {
               if (!url || !BRAND_COLORS[platform]) return null;
-              const color = BRAND_COLORS[platform];
+              const color = pendingMono ? theme.text : BRAND_COLORS[platform];
               return (
                 <a
                   key={platform}
@@ -180,7 +271,7 @@ export default function ProfilePage() {
 
       {/* Items */}
       {linkItems.length === 0 ? (
-        <p style={{ textAlign: "center", color: "#9ca3af" }}>No links yet.</p>
+        <p style={{ textAlign: "center", opacity: 0.5 }}>No links yet.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {items.map((item, i) => {
@@ -192,7 +283,8 @@ export default function ProfilePage() {
                     fontSize: "0.7rem",
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
-                    color: "#9ca3af",
+                    color: pendingHeader ?? theme.text,
+                    opacity: pendingHeader ? 1 : 0.4,
                   }}>
                     {item.title}
                   </span>
@@ -209,7 +301,7 @@ export default function ProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-card"
-                style={{ "--accent": accentColor } as React.CSSProperties & { "--accent": string }}
+                style={{ background: theme.card, color: theme.text, borderColor: `${theme.label}28` }}
               >
                 {ogImage && (
                   <img
@@ -218,12 +310,10 @@ export default function ProfilePage() {
                     onError={(e) => { e.currentTarget.style.display = "none"; }}
                     style={{
                       alignSelf: "stretch",
-                      marginTop: "-0.875rem",
-                      marginBottom: "-0.875rem",
-                      marginLeft: "-1.25rem",
-                      width: 80,
+                      marginLeft: "calc(-1rem + 0.65rem)",
+                      width: 110,
                       flexShrink: 0,
-                      borderRadius: "12px 0 0 12px",
+                      borderRadius: "10px",
                       objectFit: "cover",
                     }}
                   />
@@ -250,7 +340,7 @@ export default function ProfilePage() {
           to="/"
           style={{
             fontSize: "0.75rem",
-            color: accentColor,
+            color: theme.label,
             textDecoration: "none",
             fontFamily: "Georgia, serif",
             letterSpacing: "0.03em",
@@ -260,6 +350,205 @@ export default function ProfilePage() {
           loul.ink
         </Link>
       </div>
+
+      {/* Owner theme toolbar — collapsed bookmark tab */}
+      {isOwner && !paletteOpen && (
+        <button
+          type="button"
+          title="Open theme palette"
+          onClick={() => setPaletteOpen(true)}
+          style={{
+            position: "fixed", bottom: 0, right: 0,
+            width: 44, height: 36,
+            background: `${theme.card}f0`, backdropFilter: "blur(12px)",
+            border: `1px solid ${theme.label}30`, borderBottom: "none",
+            borderRadius: "8px 8px 0 0",
+            color: theme.text, fontSize: "0.85rem",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 100, boxShadow: "0 -2px 8px #0002",
+          }}
+        >↑</button>
+      )}
+
+      {/* Owner theme toolbar */}
+      {isOwner && paletteOpen && (
+        <div style={{
+          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 600,
+          background: `${theme.card}f0`,
+          backdropFilter: "blur(12px)",
+          borderTop: `1px solid ${theme.label}30`,
+          padding: "0.6rem 1rem",
+          display: "flex", flexDirection: "column", gap: "0.5rem",
+          zIndex: 100,
+          boxSizing: "border-box",
+        }}>
+          {/* Close button */}
+          <button
+            type="button"
+            title="Close palette"
+            onClick={() => setPaletteOpen(false)}
+            style={{
+              position: "absolute", top: 6, right: 8,
+              background: "none", border: "none", cursor: "pointer",
+              color: theme.text, opacity: 0.4, fontSize: "1rem", lineHeight: 1,
+              padding: "2px 4px",
+            }}
+          >✕</button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Theme</span>
+
+          {/* Auto */}
+          <button
+            type="button"
+            title="Auto"
+            onClick={() => { setPendingKey(null); setThemeSaved(false); }}
+            style={{
+              width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+              background: "linear-gradient(135deg, #f78f1e 0%, #56b0e3 50%, #9b59b6 100%)",
+              border: "none", cursor: "pointer", padding: 0,
+              outline: pendingKey === null ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              outlineOffset: 2, transition: "outline-color 150ms",
+            }}
+          />
+
+          {/* Presets */}
+          {Object.entries(THEMES).map(([key, t]) => (
+            <button
+              key={key}
+              type="button"
+              title={THEME_NAMES[key]}
+              onClick={() => { setPendingKey(key); setPendingHeader(t.label); setThemeSaved(false); }}
+              style={{
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                background: t.bg,
+                border: "none", cursor: "pointer", padding: 0,
+                outline: pendingKey === key ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }}
+            />
+          ))}
+
+          {/* Custom color picker */}
+          <label title="Custom color" style={{ position: "relative", width: 26, height: 26, flexShrink: 0, cursor: "pointer" }}>
+            <span style={{
+              display: "block", width: 26, height: 26, borderRadius: "50%",
+              background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+              outline: (pendingKey !== null && !THEMES[pendingKey]) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              outlineOffset: 2, transition: "outline-color 150ms",
+            }} />
+            <input
+              type="color"
+              value={(pendingKey !== null && !THEMES[pendingKey]) ? pendingKey : "#ee3666"}
+              onChange={(e) => { setPendingKey(e.target.value); setThemeSaved(false); }}
+              style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+            />
+          </label>
+
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Headers</span>
+            {HEADER_COLOR_PRESETS.map(({ name, color }) => (
+              <button
+                key={name}
+                type="button"
+                title={name}
+                onClick={() => { setPendingHeader(color); setThemeSaved(false); }}
+                style={{
+                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                  background: color === null ? `linear-gradient(135deg, ${theme.text}66, ${theme.text}22)` : theme.card,
+                  border: color === null ? `2px dashed ${theme.text}44` : `1.5px solid ${theme.text}18`,
+                  cursor: "pointer", padding: 0,
+                  outline: pendingHeader === color ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outlineOffset: 2, transition: "outline-color 150ms",
+                  color: color ?? "transparent",
+                  fontSize: "1.1rem", fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                {color !== null && "A"}
+              </button>
+            ))}
+            <label title="Custom header color" style={{ position: "relative", width: 26, height: 26, flexShrink: 0, cursor: "pointer" }}>
+              <span style={{
+                display: "block", width: 26, height: 26, borderRadius: "50%",
+                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                outline: (pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }} />
+              <input
+                type="color"
+                value={(pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? pendingHeader : "#888888"}
+                onChange={(e) => { setPendingHeader(e.target.value); setThemeSaved(false); }}
+                style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              />
+            </label>
+          </div>
+
+          {/* Avatar shape picker */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Shape</span>
+            {AVATAR_SHAPES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                title={s === "circle" ? "Circle" : `Blob ${s}`}
+                onClick={() => { setPendingShape(s); setThemeSaved(false); }}
+                style={{
+                  width: 34, height: 34, flexShrink: 0, background: "none", border: "none",
+                  cursor: "pointer", padding: 2,
+                  outline: pendingShape === s ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outlineOffset: 2, borderRadius: 4, transition: "outline-color 150ms",
+                }}
+              >
+                {s === "circle" ? (
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${theme.label}99` }} />
+                ) : (
+                  <svg viewBox={AVATAR_BLOB_SHAPES[s].viewBox} style={{ width: 30, height: 30, display: "block" }}>
+                    <path d={AVATAR_BLOB_SHAPES[s].d} fill={`${theme.label}99`} />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Social color toggle */}
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={!pendingMono}
+              onChange={(e) => { setPendingMono(!e.target.checked); setThemeSaved(false); }}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.label }}
+            />
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5 }}>
+              Social colors
+            </span>
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
+            {themeSaved && (
+              <span style={{ fontSize: "0.75rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveTheme}
+              disabled={!isDirty || themeSaving}
+              style={{
+                background: theme.bg,
+                color: theme.text,
+                border: "none", borderRadius: 20, padding: "0.3rem 0.9rem",
+                fontSize: "0.75rem", fontWeight: 700, cursor: isDirty ? "pointer" : "default",
+                opacity: themeSaving ? 0.5 : isDirty ? 1 : 0.25,
+                transition: "opacity 200ms",
+              }}
+            >
+              {themeSaving ? "…" : "Save"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
