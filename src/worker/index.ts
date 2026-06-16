@@ -92,7 +92,7 @@ app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT username, display_name, bio, categories, verified, avatar_asset_id, social_links, accent_color
+    SELECT username, display_name, bio, categories, verified, hide_from_directory, avatar_asset_id, social_links, accent_color
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
@@ -348,6 +348,21 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   return c.json({ avatarUrl: avatarUrl(newKey) });
 });
 
+app.put("/api/me/directory-visibility", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ hide?: unknown }>(c);
+  const hide = body?.hide === true;
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles
+    SET hide_from_directory = ${hide}
+    WHERE user_id = ${userId} AND verified = true
+    RETURNING username, display_name, bio, categories, verified, hide_from_directory, avatar_asset_id, social_links, accent_color
+  `;
+  if (!profile) return c.json({ error: "Not allowed" }, 403);
+  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) } });
+});
+
 app.get("/api/username/:username/available", async (c) => {
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
@@ -460,7 +475,7 @@ app.get("/api/directory", async (c) => {
   const rows = await sql`
     SELECT username, display_name, bio, categories, avatar_asset_id
     FROM public.profiles
-    WHERE verified = true
+    WHERE verified = true AND hide_from_directory IS NOT TRUE
     ORDER BY display_name
   `;
   const members = rows.map((p) => ({

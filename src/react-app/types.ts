@@ -11,6 +11,8 @@ export type ProfileData = {
   categories: string[];
   social_links: Record<string, string>;
   accent_color: string | null;
+  verified?: boolean;
+  hide_from_directory?: boolean;
 };
 export type DraftLink = { kind: "link"; title: string; url: string; icon?: string };
 export type DraftHeader = { kind: "header"; title: string };

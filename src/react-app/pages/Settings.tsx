@@ -57,9 +57,30 @@ export default function Settings() {
   const [appearanceSuccess, setAppearanceSuccess] = useState(false);
   const [appearanceSubmitting, setAppearanceSubmitting] = useState(false);
 
+  const [hideFromDirectory, setHideFromDirectory] = useState(profile?.hide_from_directory ?? false);
+  const [visibilitySuccess, setVisibilitySuccess] = useState(false);
+  const [visibilitySubmitting, setVisibilitySubmitting] = useState(false);
+
   const previewTheme = resolvePreviewTheme(accentColor);
   const isCustomAccent = accentColor !== null && !THEMES[accentColor];
   const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
+
+  async function handleVisibilityToggle(hide: boolean) {
+    if (!session) return;
+    setVisibilitySubmitting(true);
+    setVisibilitySuccess(false);
+    const res = await fetch("/api/me/directory-visibility", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ hide }),
+    });
+    if (res.ok) {
+      setHideFromDirectory(hide);
+      setVisibilitySuccess(true);
+      deleteCached("/api/directory");
+    }
+    setVisibilitySubmitting(false);
+  }
 
   async function handleBioSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -476,6 +497,28 @@ export default function Settings() {
           </p>
         </form>
       </div>
+
+      {/* Directory visibility — verified users only */}
+      {profile.verified && (
+        <div className="settings-card">
+          <h2 style={{ textAlign: "center" }}>Directory visibility</h2>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={hideFromDirectory}
+              disabled={visibilitySubmitting}
+              onChange={(e) => handleVisibilityToggle(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer" }}
+            />
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#555" }}>
+              Hide me from the home page
+            </span>
+          </label>
+          {visibilitySuccess && (
+            <p style={{ textAlign: "center", marginTop: "0.75rem" }}>Saved!</p>
+          )}
+        </div>
+      )}
 
       {/* Username */}
       <div className="settings-card">
