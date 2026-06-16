@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
+import { autoTextColor, extractDominantColor, generateCardPalette } from "../lib/color";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
 import { AvatarImage } from "../components/Avatar";
@@ -17,17 +18,25 @@ const GROUP_COLORS: Record<string, string> = {
 };
 
 
-function resolvePreviewTheme(accentColor: string | null): ProfileTheme {
-  if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
-  if (accentColor && accentColor.startsWith("#")) {
-    const r = parseInt(accentColor.slice(1, 3), 16);
-    const g = parseInt(accentColor.slice(3, 5), 16);
-    const b = parseInt(accentColor.slice(5, 7), 16);
-    const mix = 0.22;
-    const bg = `rgb(${Math.round(r * mix + 255 * (1 - mix))},${Math.round(g * mix + 255 * (1 - mix))},${Math.round(b * mix + 255 * (1 - mix))})`;
-    return { bg, card: "#ffffff", text: "#111111", label: accentColor };
+function bgForKey(key: string | null): string {
+  if (key && THEMES[key]) return THEMES[key].bg;
+  if (key && /^#[0-9a-fA-F]{6}$/.test(key)) return key;
+  return "#fdf8f2";
+}
+
+function resolvePreviewTheme(accentColor: string | null, cardColor: string | null, cardTextColor: string | null): ProfileTheme {
+  let base: ProfileTheme;
+  if (accentColor && THEMES[accentColor]) {
+    base = THEMES[accentColor];
+  } else if (accentColor && accentColor.startsWith("#")) {
+    const bgText = autoTextColor(accentColor);
+    base = { bg: accentColor, card: "#ffffff", text: bgText, cardText: "#111111", label: bgText };
+  } else {
+    base = { bg: "#fdf8f2", card: "#ffffff", text: "#111111", cardText: "#111111", label: "#6b7280" };
   }
-  return { bg: "#fdf8f2", card: "#ffffff", text: "#111111", label: "#6b7280" };
+  const card = cardColor ?? base.card;
+  const cardText = cardTextColor ?? autoTextColor(card);
+  return { ...base, card, cardText };
 }
 
 export default function Settings() {
@@ -48,11 +57,14 @@ export default function Settings() {
   const [categorySuccess, setCategorySuccess] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
 
-  const { themeKey: initTheme, headerColor: initHeader, monoSocial: initMono, avatarShape: initShape } = parseAccentColor(profile?.accent_color ?? null);
+  const { themeKey: initTheme, headerColor: initHeader, monoSocial: initMono, avatarShape: initShape, cardColor: initCardColor, cardTextColor: initCardTextColor } = parseAccentColor(profile?.accent_color ?? null);
   const [accentColor, setAccentColor] = useState<string | null>(initTheme);
   const [headerColor, setHeaderColor] = useState<string | null>(initHeader);
   const [monoSocial, setMonoSocial] = useState<boolean>(initMono);
   const [avatarShape, setAvatarShape] = useState<AvatarShape>(initShape);
+  const [cardColor, setCardColor] = useState<string | null>(initCardColor);
+  const [cardTextColor, setCardTextColor] = useState<string | null>(initCardTextColor);
+  const [extractingColor, setExtractingColor] = useState(false);
   const [appearanceError, setAppearanceError] = useState("");
   const [appearanceSuccess, setAppearanceSuccess] = useState(false);
   const [appearanceSubmitting, setAppearanceSubmitting] = useState(false);
@@ -61,9 +73,10 @@ export default function Settings() {
   const [visibilitySuccess, setVisibilitySuccess] = useState(false);
   const [visibilitySubmitting, setVisibilitySubmitting] = useState(false);
 
-  const previewTheme = resolvePreviewTheme(accentColor);
+  const previewTheme = resolvePreviewTheme(accentColor, cardColor, cardTextColor);
   const isCustomAccent = accentColor !== null && !THEMES[accentColor];
   const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
+  const isCustomCardText = cardTextColor !== null;
 
   async function handleVisibilityToggle(hide: boolean) {
     if (!session) return;
@@ -137,7 +150,7 @@ export default function Settings() {
     const res = await fetch("/api/me/accent", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ accent_color: accentColor, header_color: headerColor, mono_social: monoSocial, avatar_shape: avatarShape }),
+      body: JSON.stringify({ accent_color: accentColor, header_color: headerColor, mono_social: monoSocial, avatar_shape: avatarShape, card_color: cardColor, card_text_color: cardTextColor }),
     });
     const d = await res.json();
     if (!res.ok) { setAppearanceError(d.error ?? "Failed to update."); setAppearanceSubmitting(false); return; }
@@ -254,7 +267,7 @@ export default function Settings() {
                 <div key={text} style={{
                   background: previewTheme.card, borderRadius: 10, padding: "0.45rem 0.75rem",
                   border: `1px solid ${previewTheme.label}28`, marginBottom: "0.35rem",
-                  fontSize: "0.8rem", fontWeight: 600, color: previewTheme.text, textAlign: "left",
+                  fontSize: "0.8rem", fontWeight: 600, color: previewTheme.cardText, textAlign: "left",
                 }}>{text}</div>
               ))}
             </div>
@@ -264,7 +277,7 @@ export default function Settings() {
           <span style={labelStyle}>Theme</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", marginBottom: "1.25rem" }}>
             {/* Auto */}
-            <button type="button" onClick={() => setAccentColor(null)}
+            <button type="button" onClick={() => { setAccentColor(null); setHeaderColor(null); setCardColor(null); setCardTextColor(null); }}
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
               <span style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -281,7 +294,12 @@ export default function Settings() {
               const t = THEMES[key];
               const selected = accentColor === key;
               return (
-                <button key={key} type="button" onClick={() => { setAccentColor(key); setHeaderColor(t.label); }}
+                <button key={key} type="button" onClick={() => {
+                  const idx = cardColor !== null ? generateCardPalette(bgForKey(accentColor)).indexOf(cardColor) : -1;
+                  setAccentColor(key);
+                  setHeaderColor(t.label);
+                  if (idx !== -1) setCardColor(generateCardPalette(THEMES[key].bg)[idx]);
+                }}
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                   <span style={{
                     display: "block", width: 56, height: 44, borderRadius: 8,
@@ -306,7 +324,12 @@ export default function Settings() {
                 }}>
                   <input type="color"
                     value={isCustomAccent ? (accentColor ?? "#ee3666") : "#ee3666"}
-                    onChange={(e) => setAccentColor(e.target.value)}
+                    onChange={(e) => {
+                      const newKey = e.target.value;
+                      const idx = cardColor !== null ? generateCardPalette(bgForKey(accentColor)).indexOf(cardColor) : -1;
+                      setAccentColor(newKey);
+                      if (idx !== -1) setCardColor(generateCardPalette(bgForKey(newKey))[idx]);
+                    }}
                     style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
                   />
                 </span>
@@ -324,7 +347,7 @@ export default function Settings() {
                 <button key={name} type="button" title={name} onClick={() => setHeaderColor(color)}
                   style={{
                     width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-                    background: color === null ? "linear-gradient(135deg, #aaa 0%, #ddd 100%)" : "#fff",
+                    background: color === null ? "none" : "#fff",
                     border: color === null ? "2px dashed #bbb" : `1.5px solid #e5e7eb`,
                     outline: selected ? "2.5px solid #333" : "2.5px solid transparent",
                     outlineOffset: 2, cursor: "pointer", padding: 0,
@@ -385,6 +408,110 @@ export default function Settings() {
             />
             <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#555" }}>Show social media brand colors</span>
           </label>
+
+          {/* Card color */}
+          <span style={labelStyle}>Card background color</span>
+          {(() => {
+            const palette = generateCardPalette(previewTheme.bg);
+            const isCustomCard = cardColor !== null && !palette.includes(cardColor);
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1.25rem" }}>
+                <button type="button" title="Auto" onClick={() => setCardColor(null)}
+                  style={{
+                    width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                    background: "none", border: "2px dashed #bbb",
+                    outline: cardColor === null ? "2.5px solid #333" : "2.5px solid transparent",
+                    outlineOffset: 2, cursor: "pointer",
+                    transition: "outline-color 150ms",
+                  }}
+                />
+                {palette.map((hex) => (
+                  <button key={hex} type="button" title={hex} onClick={() => setCardColor(hex)}
+                    style={{
+                      width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                      background: hex,
+                      border: `1.5px solid ${hex === "#ffffff" ? "#e5e7eb" : hex}`,
+                      outline: cardColor === hex ? "2.5px solid #333" : "2.5px solid transparent",
+                      outlineOffset: 2, cursor: "pointer", padding: 0,
+                      transition: "outline-color 150ms",
+                    }}
+                  />
+                ))}
+                <label title="Custom card color" style={{ position: "relative", width: 34, height: 34, flexShrink: 0, cursor: "pointer", display: "block" }}>
+                  <span style={{
+                    display: "block", width: 34, height: 34, borderRadius: "50%",
+                    background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                    outline: isCustomCard ? "2.5px solid #333" : "2.5px solid transparent",
+                    outlineOffset: 2, overflow: "hidden", position: "relative",
+                    transition: "outline-color 150ms",
+                  }}>
+                    <input type="color"
+                      value={cardColor ?? "#ffffff"}
+                      onChange={(e) => setCardColor(e.target.value)}
+                      style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+                    />
+                  </span>
+                </label>
+              </div>
+            );
+          })()}
+
+          {/* Card text color */}
+          <span style={labelStyle}>Card text color</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1.5rem" }}>
+            <button type="button" title="Auto (WCAG contrast)" onClick={() => setCardTextColor(null)}
+              style={{
+                width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                background: "none", border: "2px dashed #bbb",
+                outline: !isCustomCardText ? "2.5px solid #333" : "2.5px solid transparent",
+                outlineOffset: 2, cursor: "pointer",
+                transition: "outline-color 150ms",
+              }}
+            />
+            <label title="Custom card text color" style={{ position: "relative", width: 44, height: 34, flexShrink: 0, cursor: "pointer", display: "block" }}>
+              <span style={{
+                display: "block", width: 44, height: 34, borderRadius: 8,
+                background: cardTextColor ?? "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                border: `1.5px solid ${cardTextColor ? "#aaa" : "#e5e7eb"}`,
+                outline: isCustomCardText ? "2.5px solid #333" : "2.5px solid transparent",
+                outlineOffset: 2, overflow: "hidden", position: "relative",
+                transition: "outline-color 150ms",
+              }}>
+                <input type="color"
+                  value={cardTextColor ?? "#111111"}
+                  onChange={(e) => setCardTextColor(e.target.value)}
+                  style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+                />
+              </span>
+            </label>
+            <span style={{ fontSize: "0.75rem", color: "#888" }}>
+              Auto picks dark or light text for readability
+            </span>
+          </div>
+
+          {/* Generate from avatar */}
+          {avatarUrl && (
+            <div style={{ marginBottom: "1.5rem", textAlign: "center" }}>
+              <button
+                type="button"
+                disabled={extractingColor}
+                onClick={async () => {
+                  setExtractingColor(true);
+                  const color = await extractDominantColor(avatarUrl);
+                  if (color) setAccentColor(color);
+                  setExtractingColor(false);
+                }}
+                style={{
+                  background: "none", border: "1.5px solid #d1d5db", borderRadius: 20,
+                  padding: "0.35rem 1rem", fontSize: "0.8rem", fontWeight: 600,
+                  color: "#555", cursor: extractingColor ? "default" : "pointer",
+                  opacity: extractingColor ? 0.5 : 1, transition: "opacity 150ms",
+                }}
+              >
+                {extractingColor ? "Extracting…" : "Generate theme from photo"}
+              </button>
+            </div>
+          )}
 
           {appearanceError && <p style={{ textAlign: "center" }}><strong>{appearanceError}</strong></p>}
           {appearanceSuccess && <p style={{ textAlign: "center" }}>Appearance saved!</p>}
