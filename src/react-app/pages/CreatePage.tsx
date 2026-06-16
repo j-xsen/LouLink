@@ -4,13 +4,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { GripVertical } from "lucide-react";
 import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { getDraft, saveDraft, clearDraft } from "../lib/draft";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
-import { PageHeader, ShapeTitle } from "../components/ui";
+import { PageHeader, ShapeTitle, BlobButton, DragHandle } from "../components/ui";
 import { Icon, IconPicker, BRAND_COLORS } from "../components/icons";
 import type { DraftItem, DraftHeader } from "../types";
 
@@ -96,10 +95,100 @@ export default function CreatePage() {
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
-  const [showNewForm, setShowNewForm] = useState(true);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [showNewForm, setShowNewForm] = useState(() => (getDraft().items ?? []).length === 0);
+  const [showNav, setShowNav] = useState(false);
+  interface DragState {
+    index: number;
+    currentY: number;
+    cardLeft: number;
+    cardWidth: number;
+    grabOffsetY: number;
+  }
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const dragHandlePressed = useRef<number | null>(null);
+  const dragOverRef = useRef<number | null>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const pointerYRef = useRef<number>(0);
+  const dragIndex = drag?.index ?? null;
+
+  function startDrag(e: React.PointerEvent, i: number) {
+    e.preventDefault();
+    const el = cardRefs.current[i];
+    const rect = el?.getBoundingClientRect();
+    setDrag({
+      index: i,
+      currentY: e.clientY,
+      cardLeft: rect?.left ?? 0,
+      cardWidth: rect?.width ?? 300,
+      grabOffsetY: rect ? e.clientY - rect.top : 0,
+    });
+    dragOverRef.current = null;
+    setDragOverIndex(null);
+  }
+
+  useEffect(() => {
+    if (!drag) return;
+    const { index } = drag;
+
+    const SCROLL_ZONE = 80; // px from viewport edge that triggers auto-scroll
+    const MAX_SPEED = 18;   // px per frame at the very edge
+    let rafId: number | null = null;
+
+    function scheduleScroll() {
+      if (rafId !== null) return;
+      function tick() {
+        const y = pointerYRef.current;
+        const vh = window.innerHeight;
+        let speed = 0;
+        if (y < SCROLL_ZONE) speed = -MAX_SPEED * (1 - y / SCROLL_ZONE);
+        else if (y > vh - SCROLL_ZONE) speed = MAX_SPEED * (1 - (vh - y) / SCROLL_ZONE);
+        if (speed !== 0) {
+          window.scrollBy(0, speed);
+          // Keep the ghost card position in sync after scroll
+          setDrag(prev => prev ? { ...prev, currentY: pointerYRef.current } : null);
+          rafId = requestAnimationFrame(tick);
+        } else {
+          rafId = null;
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function onMove(e: PointerEvent) {
+      e.preventDefault();
+      pointerYRef.current = e.clientY;
+      setDrag(prev => prev ? { ...prev, currentY: e.clientY } : null);
+      scheduleScroll();
+      // Cards stay in DOM (opacity 0) so positions are stable — hit-testing is accurate
+      let over: number | null = null;
+      for (let j = 0; j < cardRefs.current.length; j++) {
+        if (j === index) continue;
+        const el = cardRefs.current[j];
+        if (!el) continue;
+        const { top, bottom } = el.getBoundingClientRect();
+        if (e.clientY >= top && e.clientY <= bottom) { over = j; break; }
+      }
+      dragOverRef.current = over;
+      setDragOverIndex(over);
+    }
+
+    function onUp() {
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      const over = dragOverRef.current;
+      if (over !== null && over !== index) moveItem(index, over);
+      setDrag(null);
+      setDragOverIndex(null);
+      dragOverRef.current = null;
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [drag !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateItems(next: DraftItem[]) {
     setItems(next);
@@ -148,182 +237,152 @@ export default function CreatePage() {
   }
 
   function moveItem(from: number, to: number) {
-    const next = [...items];
-    next.splice(to, 0, next.splice(from, 1)[0]);
-    updateItems(next);
+    setItems(prev => {
+      const next = [...prev];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      saveDraft({ items: next });
+      return next;
+    });
   }
 
-  function dragCardStyle(i: number) {
-    const isOver = dragOverIndex === i && dragIndex !== null && dragIndex !== i;
-    return {
-      opacity: dragIndex === i ? 0.4 : 1,
-      outline: isOver ? "2px solid #555" : "none",
-      borderRadius: 4,
-      transform: isOver ? `translateY(${dragIndex! < i ? "-16px" : "16px"})` : "none",
-      transition: "transform 150ms ease",
-    };
-  }
+  const fieldLabel: React.CSSProperties = {
+    display: "block",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: "#9ca3af",
+    marginBottom: "0.25rem",
+  };
+
+  const ghostBtn: React.CSSProperties = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "0.85rem",
+    color: "#9ca3af",
+    padding: "0.25rem 0.5rem",
+    letterSpacing: "0.03em",
+  };
 
   return (
     <>
       <PageHeader />
+      <div id="link-list" style={{ position: "relative", top: "-1rem" }} aria-hidden />
       <ShapeTitle>{profile ? "Edit your links" : "Build your page"}</ShapeTitle>
-      <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
-        <button type="button" onClick={() => document.getElementById("social-links")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↓ Social links</button>
-      </div>
-      {!profile && <p>Add your links below. You can create an account when you're ready to save.</p>}
+      {!profile && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: "0.9rem" }}>Add your links below. You can create an account when you're ready to save.</p>}
 
-      <div id="link-list">
-      {items.map((item, i) => (
-        <div
-          key={i}
-          draggable
-          onDragStart={(e) => {
-            if (dragHandlePressed.current !== i) { e.preventDefault(); return; }
-            setDragIndex(i);
-          }}
-          onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
-          onDrop={() => {
-            if (dragIndex !== null && dragIndex !== i) moveItem(dragIndex, i);
-            setDragIndex(null);
-            setDragOverIndex(null);
-          }}
-          onDragEnd={() => { dragHandlePressed.current = null; setDragIndex(null); setDragOverIndex(null); }}
-          style={{ ...dragCardStyle(i), position: "relative" }}
-        >
-          {/* Transparent overlay during drag captures events that child inputs would absorb */}
-          {dragIndex !== null && dragIndex !== i && (
-            <div style={{ position: "absolute", inset: 0, zIndex: 1 }} />
-          )}
-          <hr />
-          {item.kind === "header" ? (
-            <>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "grab", userSelect: "none" }}
-                onPointerDown={() => { dragHandlePressed.current = i; }}
-                onPointerUp={() => { dragHandlePressed.current = null; }}
-              >
-                <GripVertical size={16} />
-                <span style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.08em" }}>Section Header</span>
-              </div>
-              <p>
-                <label>
-                  Label<br />
-                  <input
-                    type="text"
-                    value={item.title}
-                    onChange={(e) => updateItem(i, { title: e.target.value })}
-                  />
-                </label>
-              </p>
-              <p>
-                <button type="button" onClick={() => removeItem(i)}>Remove</button>
-              </p>
-            </>
-          ) : (
-            <>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "grab", userSelect: "none" }}
-                onPointerDown={() => { dragHandlePressed.current = i; }}
-                onPointerUp={() => { dragHandlePressed.current = null; }}
-              >
-                <GripVertical size={16} />
-                <span style={{ fontWeight: "bold" }}>{item.title || "Untitled"}</span>
-              </div>
-              <p>
-                <label>
-                  Title<br />
-                  <input
-                    type="text"
-                    value={item.title}
-                    onChange={(e) => updateItem(i, { title: e.target.value })}
-                  />
-                </label>
-              </p>
-              <p>
-                <label>
-                  URL<br />
-                  <input
-                    type="text"
-                    value={item.url}
-                    onChange={(e) => updateItem(i, { url: e.target.value })}
-                  />
-                </label>
-              </p>
-              <div>
-                <label>
-                  Icon<br />
-                  <IconPicker value={item.icon ?? ""} onChange={(v) => updateItem(i, { icon: v || undefined })} />
-                </label>
-              </div>
-              <p>
-                <button type="button" onClick={() => removeItem(i)}>Remove</button>
-              </p>
-            </>
-          )}
-        </div>
-      ))}
-      </div>
-
-      <hr />
-
-      {showNewForm ? (
-        <>
-          <p>
-            <label>
-              Title<br />
-              <input
-                type="text"
-                value={linkTitle}
-                onChange={(e) => setLinkTitle(e.target.value)}
-              />
-            </label>
-          </p>
-          <p>
-            <label>
-              URL<br />
-              <input
-                type="text"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-              />
-            </label>
-          </p>
-          <div>
-            <label>
-              Icon<br />
-              <IconPicker value={linkIcon} onChange={setLinkIcon} />
-            </label>
-          </div>
-          <p>
-            <button
-              type="button"
-              onClick={addLink}
-              disabled={!linkTitle.trim() || !linkUrl.trim()}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
+        {items.map((item, i) => {
+          const isDragging = dragIndex === i;
+          const isTarget = dragOverIndex === i && dragIndex !== null;
+          return (
+            <div
+              key={i}
+              ref={(el) => { cardRefs.current[i] = el; }}
+              style={{ borderRadius: 14, opacity: isDragging ? 0 : 1, outline: isTarget ? "2px dashed #f78f1e" : "none", outlineOffset: 2 }}
             >
-              Add link
-            </button>
-            {!linkTitle.trim() && !linkUrl.trim() && items.length > 0 && (
-              <> <button type="button" onClick={() => setShowNewForm(false)}>Cancel</button></>
-            )}
-          </p>
-          <p>
-            <button type="button" onClick={addHeader}>+ Add header</button>
-          </p>
-        </>
-      ) : (
-        <p style={{ display: "flex", gap: "0.5rem" }}>
-          <button type="button" onClick={() => setShowNewForm(true)}>+ Add link</button>
-          <button type="button" onClick={addHeader}>+ Add header</button>
-        </p>
-      )}
+              {item.kind === "header" ? (
+                <div style={{ background: "#fef3e2", border: "1px solid #f78f1e", borderLeft: "4px solid #f78f1e", borderRadius: 14, padding: "0.9rem 1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <div style={{ color: "#f78f1e", cursor: "grab", display: "flex", userSelect: "none", touchAction: "none" }} onPointerDown={(e) => startDrag(e, i)}>
+                      <DragHandle size={18} />
+                    </div>
+                    <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#f78f1e", flex: 1 }}>Section</span>
+                    <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, color: "#f78f1e", fontSize: "1rem", padding: "0 0.25rem" }}>×</button>
+                  </div>
+                  <label>
+                    <span style={fieldLabel}>Label</span>
+                    <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
+                  </label>
+                </div>
+              ) : (
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "0.9rem 1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <div style={{ color: "#d1d5db", cursor: "grab", display: "flex", userSelect: "none", touchAction: "none" }} onPointerDown={(e) => startDrag(e, i)}>
+                      <DragHandle size={18} />
+                    </div>
+                    <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title || "Untitled"}</span>
+                    <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, fontSize: "1.1rem", padding: "0 0.25rem" }}>×</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <label>
+                      <span style={fieldLabel}>Title</span>
+                      <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
+                    </label>
+                    <label>
+                      <span style={fieldLabel}>URL</span>
+                      <input type="text" value={item.url} onChange={(e) => updateItem(i, { url: e.target.value })} />
+                    </label>
+                    <div>
+                      <span style={fieldLabel}>Icon</span>
+                      <IconPicker value={item.icon ?? ""} onChange={(v) => updateItem(i, { icon: v || undefined })} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      <hr />
-      <div id="social-links" style={{ marginTop: "0.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
-          <p style={{ fontWeight: 700, textTransform: "uppercase", fontSize: "0.75rem", letterSpacing: "0.08em", color: "#9ca3af", margin: 0 }}>Social links</p>
-          <button type="button" onClick={() => document.getElementById("link-list")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↑ Links</button>
-        </div>
+      <div style={{ marginTop: "1.25rem" }}>
+        {showNewForm ? (
+          <div className="settings-card">
+            <p style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.2rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#12080b", margin: "0 0 1rem" }}>Add a Link</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <label>
+                <span style={fieldLabel}>Title</span>
+                <input
+                  type="text"
+                  value={linkTitle}
+                  onChange={(e) => setLinkTitle(e.target.value)}
+                />
+              </label>
+              <label>
+                <span style={fieldLabel}>URL</span>
+                <input
+                  type="text"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                />
+              </label>
+              <div>
+                <span style={fieldLabel}>Icon</span>
+                <IconPicker value={linkIcon} onChange={setLinkIcon} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginTop: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                {(!linkTitle.trim() && !linkUrl.trim() && items.length > 0) && (
+                  <button type="button" onClick={() => setShowNewForm(false)} style={ghostBtn}>Cancel</button>
+                )}
+              </div>
+              <BlobButton
+                type="button"
+                onClick={addLink}
+                disabled={!linkTitle.trim() || !linkUrl.trim()}
+              >
+                Add link
+              </BlobButton>
+              <div />
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
+            <button type="button" onClick={() => setShowNewForm(true)} style={{ ...ghostBtn, border: "1px solid #e5e7eb", borderRadius: 20, padding: "0.3rem 0.9rem", color: "#12080b" }}>+ Add link</button>
+            <button type="button" onClick={addHeader} style={{ ...ghostBtn, border: "1px solid #e5e7eb", borderRadius: 20, padding: "0.3rem 0.9rem", color: "#12080b" }}>+ Add header</button>
+          </div>
+        )}
+        {showNewForm && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "0.5rem" }}>
+            <button type="button" onClick={addHeader} style={ghostBtn}>+ Add section header</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: "2rem" }} id="social-links">
+        <ShapeTitle>Social Links</ShapeTitle>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"] as const).map((platform) => {
             const color = BRAND_COLORS[platform];
@@ -346,11 +405,11 @@ export default function CreatePage() {
       </div>
 
       {session ? (
-        <>
+        <div style={{ marginTop: "2rem" }}>
           {!profile && (
-            <p style={{ marginTop: "2rem" }}>
+            <div className="settings-card">
               <label>
-                Username (loul.ink/…)<br />
+                <span style={fieldLabel}>Username (loul.ink/…)</span>
                 <input
                   type="text"
                   value={username}
@@ -358,39 +417,96 @@ export default function CreatePage() {
                 />
               </label>
               {username && (
-                <span>
-                  {" "}
+                <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: checkStatus === "available" ? "#16a34a" : checkStatus === "taken" || checkStatus === "invalid" ? "#dc2626" : "#9ca3af" }}>
                   {checkStatus === "checking" && "Checking…"}
                   {checkStatus === "available" && "✓ Available"}
                   {checkStatus === "taken" && "✗ Taken"}
                   {checkStatus === "invalid" && (validateUsername(username) ?? "Invalid")}
-                </span>
+                </p>
               )}
-            </p>
+            </div>
           )}
-          {saveError && <p><strong>{saveError}</strong></p>}
-          <p style={{ marginTop: profile ? "2rem" : undefined }}>
-            <button
+          {saveError && <p style={{ textAlign: "center", color: "#dc2626", fontWeight: 700 }}>{saveError}</p>}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}>
+            <BlobButton
               type="button"
               onClick={handleSave}
               disabled={saving || (!profile && checkStatus !== "available")}
             >
               {saving ? "Saving…" : "Save page →"}
-            </button>
-          </p>
-        </>
+            </BlobButton>
+          </div>
+        </div>
       ) : (
-        <>
-          <p style={{ marginTop: "2rem" }}>
-            <button type="button" onClick={() => navigate("/signup")}>
+        <div style={{ marginTop: "2rem", textAlign: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <BlobButton type="button" onClick={() => navigate("/signup")}>
               Create account to save →
-            </button>
-          </p>
-          <p>
+            </BlobButton>
+          </div>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#9ca3af" }}>
             Already have an account? <Link to="/signin">Sign in</Link>
           </p>
-        </>
+        </div>
       )}
+
+      {/* Floating section-jump nav */}
+      <div style={{ position: "fixed", bottom: "1.5rem", right: "1.25rem", zIndex: 900, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+        {showNav && (
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.13)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {[
+              { label: "Links", id: "link-list" },
+              { label: "Social links", id: "social-links" },
+            ].map(({ label, id }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); setShowNav(false); }}
+                style={{ background: "none", border: "none", borderBottom: id === "link-list" ? "1px solid #f3f4f6" : "none", cursor: "pointer", padding: "0.7rem 1.2rem", textAlign: "left", fontFamily: "'Aladin', Georgia, serif", fontSize: "1rem", color: "#12080b", letterSpacing: "0.04em", whiteSpace: "nowrap" }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowNav(v => !v)}
+          style={{ width: 44, height: 44, borderRadius: "50%", background: showNav ? "#12080b" : "#f78f1e", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.18)", transition: "background 150ms ease", color: "#fff", fontSize: "1.2rem", lineHeight: 1 }}
+          aria-label="Jump to section"
+        >
+          {showNav ? "×" : "☰"}
+        </button>
+      </div>
+
+      {/* Floating card that follows the pointer during drag */}
+      {drag !== null && (() => {
+        const item = items[drag.index];
+        return (
+          <div style={{
+            position: "fixed",
+            left: drag.cardLeft,
+            width: drag.cardWidth,
+            top: drag.currentY - drag.grabOffsetY,
+            zIndex: 1000,
+            pointerEvents: "none",
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 14,
+            boxShadow: "0 10px 36px rgba(0,0,0,0.18)",
+            padding: "0.9rem 1rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            opacity: 0.92,
+          }}>
+            <DragHandle size={18} />
+            <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {item.title || "Untitled"}
+            </span>
+          </div>
+        );
+      })()}
     </>
   );
 }
