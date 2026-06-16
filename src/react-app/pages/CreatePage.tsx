@@ -95,7 +95,8 @@ export default function CreatePage() {
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
-  const [showNewForm, setShowNewForm] = useState(true);
+  const [showNewForm, setShowNewForm] = useState(() => (getDraft().items ?? []).length === 0);
+  const [showNav, setShowNav] = useState(false);
   interface DragState {
     index: number;
     currentY: number;
@@ -107,6 +108,7 @@ export default function CreatePage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragOverRef = useRef<number | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const pointerYRef = useRef<number>(0);
   const dragIndex = drag?.index ?? null;
 
   function startDrag(e: React.PointerEvent, i: number) {
@@ -128,9 +130,35 @@ export default function CreatePage() {
     if (!drag) return;
     const { index } = drag;
 
+    const SCROLL_ZONE = 80; // px from viewport edge that triggers auto-scroll
+    const MAX_SPEED = 18;   // px per frame at the very edge
+    let rafId: number | null = null;
+
+    function scheduleScroll() {
+      if (rafId !== null) return;
+      function tick() {
+        const y = pointerYRef.current;
+        const vh = window.innerHeight;
+        let speed = 0;
+        if (y < SCROLL_ZONE) speed = -MAX_SPEED * (1 - y / SCROLL_ZONE);
+        else if (y > vh - SCROLL_ZONE) speed = MAX_SPEED * (1 - (vh - y) / SCROLL_ZONE);
+        if (speed !== 0) {
+          window.scrollBy(0, speed);
+          // Keep the ghost card position in sync after scroll
+          setDrag(prev => prev ? { ...prev, currentY: pointerYRef.current } : null);
+          rafId = requestAnimationFrame(tick);
+        } else {
+          rafId = null;
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
     function onMove(e: PointerEvent) {
       e.preventDefault();
+      pointerYRef.current = e.clientY;
       setDrag(prev => prev ? { ...prev, currentY: e.clientY } : null);
+      scheduleScroll();
       // Cards stay in DOM (opacity 0) so positions are stable — hit-testing is accurate
       let over: number | null = null;
       for (let j = 0; j < cardRefs.current.length; j++) {
@@ -145,6 +173,7 @@ export default function CreatePage() {
     }
 
     function onUp() {
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
       const over = dragOverRef.current;
       if (over !== null && over !== index) moveItem(index, over);
       setDrag(null);
@@ -155,6 +184,7 @@ export default function CreatePage() {
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
@@ -238,13 +268,11 @@ export default function CreatePage() {
   return (
     <>
       <PageHeader />
+      <div id="link-list" style={{ position: "relative", top: "-1rem" }} aria-hidden />
       <ShapeTitle>{profile ? "Edit your links" : "Build your page"}</ShapeTitle>
-      <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
-        <button type="button" onClick={() => document.getElementById("social-links")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↓ Social links</button>
-      </div>
       {!profile && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: "0.9rem" }}>Add your links below. You can create an account when you're ready to save.</p>}
 
-      <div id="link-list" style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
         {items.map((item, i) => {
           const isDragging = dragIndex === i;
           const isTarget = dragOverIndex === i && dragIndex !== null;
@@ -355,9 +383,6 @@ export default function CreatePage() {
 
       <div style={{ marginTop: "2rem" }} id="social-links">
         <ShapeTitle>Social Links</ShapeTitle>
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "0.5rem", marginBottom: "0.75rem" }}>
-          <button type="button" onClick={() => document.getElementById("link-list")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 20, cursor: "pointer", fontSize: "0.8rem", color: "#9ca3af", letterSpacing: "0.05em", padding: "0.3rem 0.9rem" }}>↑ Links</button>
-        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"] as const).map((platform) => {
             const color = BRAND_COLORS[platform];
@@ -424,6 +449,35 @@ export default function CreatePage() {
           </p>
         </div>
       )}
+
+      {/* Floating section-jump nav */}
+      <div style={{ position: "fixed", bottom: "1.5rem", right: "1.25rem", zIndex: 900, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+        {showNav && (
+          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.13)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            {[
+              { label: "Links", id: "link-list" },
+              { label: "Social links", id: "social-links" },
+            ].map(({ label, id }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); setShowNav(false); }}
+                style={{ background: "none", border: "none", borderBottom: id === "link-list" ? "1px solid #f3f4f6" : "none", cursor: "pointer", padding: "0.7rem 1.2rem", textAlign: "left", fontFamily: "'Aladin', Georgia, serif", fontSize: "1rem", color: "#12080b", letterSpacing: "0.04em", whiteSpace: "nowrap" }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowNav(v => !v)}
+          style={{ width: 44, height: 44, borderRadius: "50%", background: showNav ? "#12080b" : "#f78f1e", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.18)", transition: "background 150ms ease", color: "#fff", fontSize: "1.2rem", lineHeight: 1 }}
+          aria-label="Jump to section"
+        >
+          {showNav ? "×" : "☰"}
+        </button>
+      </div>
 
       {/* Floating card that follows the pointer during drag */}
       {drag !== null && (() => {
