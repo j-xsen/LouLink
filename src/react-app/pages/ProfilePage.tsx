@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
+import { Settings } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -80,7 +81,7 @@ export default function ProfilePage() {
   const [pendingShape, setPendingShape] = useState<AvatarShape>(cachedShape);
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useSeo({
     title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
@@ -367,7 +368,7 @@ export default function ProfilePage() {
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 100, boxShadow: "0 -2px 8px #0002",
           }}
-        >↑</button>
+        ><Settings size={16} /></button>
       )}
 
       {/* Owner theme toolbar */}
