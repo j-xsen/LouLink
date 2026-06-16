@@ -231,20 +231,25 @@ app.put("/api/me/bio", requireAuth, async (c) => {
 
 app.put("/api/me/accent", requireAuth, async (c) => {
   const userId = c.get("userId");
-  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown }>(c);
+  const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown; card_color?: unknown; card_text_color?: unknown }>(c);
   const HEX_RE = /^#[0-9a-fA-F]{6}$/;
   const VALID_THEMES = new Set(["bluegrass", "river", "bourbon", "midnight", "ink", "terminal"]);
   const VALID_SHAPES = new Set(["circle", "1", "5", "6", "7"]);
   const rawTheme = typeof body?.accent_color === "string" ? body.accent_color.trim() : null;
   const rawHeader = typeof body?.header_color === "string" ? body.header_color.trim() : null;
   const rawShape = typeof body?.avatar_shape === "string" ? body.avatar_shape.trim() : "circle";
+  const rawCardColor = typeof body?.card_color === "string" ? body.card_color.trim() : null;
+  const rawCardTextColor = typeof body?.card_text_color === "string" ? body.card_text_color.trim() : null;
   const monoSocial = body?.mono_social === true;
   const themeKey = rawTheme && (HEX_RE.test(rawTheme) || VALID_THEMES.has(rawTheme)) ? rawTheme : null;
   const headerColor = rawHeader && HEX_RE.test(rawHeader) ? rawHeader : null;
   const avatarShape = VALID_SHAPES.has(rawShape) ? rawShape : "circle";
+  const cardColor = rawCardColor && HEX_RE.test(rawCardColor) ? rawCardColor : null;
+  const cardTextColor = rawCardTextColor && HEX_RE.test(rawCardTextColor) ? rawCardTextColor : null;
   const monoPart = monoSocial ? "mono" : "";
   const shapePart = avatarShape !== "circle" ? avatarShape : "";
-  const stored = !themeKey && !headerColor && !monoPart && !shapePart ? null
+  const stored = !themeKey && !headerColor && !monoPart && !shapePart && !cardColor && !cardTextColor ? null
+    : cardColor || cardTextColor ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}|${cardColor ?? ""}|${cardTextColor ?? ""}`
     : shapePart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}`
     : monoPart ? `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}`
     : headerColor ? `${themeKey ?? ""}|${headerColor}`

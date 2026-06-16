@@ -7,6 +7,7 @@ import { Settings } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
+import { autoTextColor, generateCardPalette } from "../lib/color";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
@@ -27,13 +28,6 @@ type PublicProfile = {
   accent_color: string | null;
 };
 
-function toPastel(hex: string, mix = 0.22): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgb(${Math.round(r * mix + 255 * (1 - mix))}, ${Math.round(g * mix + 255 * (1 - mix))}, ${Math.round(b * mix + 255 * (1 - mix))})`;
-}
-
 function getFaviconUrl(url: string): string {
   try {
     const { hostname } = new URL(url);
@@ -43,18 +37,32 @@ function getFaviconUrl(url: string): string {
   }
 }
 
-function resolveTheme(accentColor: string | null | undefined, items: PublicItem[]): ProfileTheme {
-  if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
-  if (accentColor && accentColor.startsWith("#")) {
-    return { bg: toPastel(accentColor), card: "#ffffff", text: "#111111", label: accentColor };
+function resolveTheme(parsed: ReturnType<typeof parseAccentColor>, items: PublicItem[]): ProfileTheme {
+  const { themeKey, cardColor, cardTextColor } = parsed;
+  let base: ProfileTheme;
+  if (themeKey && THEMES[themeKey]) {
+    base = THEMES[themeKey];
+  } else if (themeKey && themeKey.startsWith("#")) {
+    const bgText = autoTextColor(themeKey);
+    base = { bg: themeKey, card: "#ffffff", text: bgText, cardText: "#111111", label: bgText };
+  } else {
+    const iconColor = (() => {
+      for (const item of items) {
+        if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) return BRAND_COLORS[item.icon];
+      }
+      return "#6b7280";
+    })();
+    base = { bg: "#fdf8f2", card: "#ffffff", text: "#111111", cardText: "#111111", label: iconColor };
   }
-  const iconColor = (() => {
-    for (const item of items) {
-      if (item.kind === "link" && item.icon && BRAND_COLORS[item.icon]) return BRAND_COLORS[item.icon];
-    }
-    return "#6b7280";
-  })();
-  return { bg: "#fdf8f2", card: "#ffffff", text: "#111111", label: iconColor };
+  const card = cardColor ?? base.card;
+  const cardText = cardTextColor ?? autoTextColor(card);
+  return { ...base, card, cardText };
+}
+
+function bgForKey(key: string | null): string {
+  if (key && THEMES[key]) return THEMES[key].bg;
+  if (key && /^#[0-9a-fA-F]{6}$/.test(key)) return key;
+  return "#fdf8f2";
 }
 
 export default function ProfilePage() {
@@ -74,11 +82,14 @@ export default function ProfilePage() {
 
   // Pending theme key for owner preview before saving
   const themeInitialized = useRef(false);
-  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono, avatarShape: cachedShape } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
+  const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono, avatarShape: cachedShape, cardColor: cachedCard, cardTextColor: cachedCardText } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
   const [pendingKey, setPendingKey] = useState<string | null>(cachedTheme);
   const [pendingHeader, setPendingHeader] = useState<string | null>(cachedHeader);
   const [pendingMono, setPendingMono] = useState<boolean>(cachedMono);
   const [pendingShape, setPendingShape] = useState<AvatarShape>(cachedShape);
+  const [pendingCardColor, setPendingCardColor] = useState<string | null>(cachedCard);
+  const [pendingCardText, setPendingCardText] = useState<string | null>(cachedCardText);
+  const [cardTextOpen, setCardTextOpen] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -103,11 +114,13 @@ export default function ProfilePage() {
         setStatus("found");
         if (!themeInitialized.current) {
           themeInitialized.current = true;
-          const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(d.profile.accent_color ?? null);
+          const { themeKey, headerColor, monoSocial, avatarShape, cardColor, cardTextColor } = parseAccentColor(d.profile.accent_color ?? null);
           setPendingKey(themeKey);
           setPendingHeader(headerColor);
           setPendingMono(monoSocial);
           setPendingShape(avatarShape);
+          setPendingCardColor(cardColor);
+          setPendingCardText(cardTextColor);
         }
       })
       .catch(() => setStatus("not-found"));
@@ -117,11 +130,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (profile && !themeInitialized.current) {
       themeInitialized.current = true;
-      const { themeKey, headerColor, monoSocial, avatarShape } = parseAccentColor(profile.accent_color ?? null);
+      const { themeKey, headerColor, monoSocial, avatarShape, cardColor, cardTextColor } = parseAccentColor(profile.accent_color ?? null);
       setPendingKey(themeKey);
       setPendingHeader(headerColor);
       setPendingMono(monoSocial);
       setPendingShape(avatarShape);
+      setPendingCardColor(cardColor);
+      setPendingCardText(cardTextColor);
     }
   }, [profile]);
 
@@ -147,9 +162,9 @@ export default function ProfilePage() {
   }, [items]);
 
   const isOwner = !!authProfile && authProfile.username === username;
-  const theme = resolveTheme(pendingKey, items);
-  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape } = parseAccentColor(profile?.accent_color ?? null);
-  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape;
+  const theme = resolveTheme({ themeKey: pendingKey, headerColor: pendingHeader, monoSocial: pendingMono, avatarShape: pendingShape, cardColor: pendingCardColor, cardTextColor: pendingCardText }, items);
+  const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape, cardColor: savedCardColor, cardTextColor: savedCardTextColor } = parseAccentColor(profile?.accent_color ?? null);
+  const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape || pendingCardColor !== savedCardColor || pendingCardText !== savedCardTextColor;
 
   useEffect(() => {
     if (!profile) return;
@@ -169,7 +184,7 @@ export default function ProfilePage() {
     const res = await fetch("/api/me/accent", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono, avatar_shape: pendingShape }),
+      body: JSON.stringify({ accent_color: pendingKey, header_color: pendingHeader, mono_social: pendingMono, avatar_shape: pendingShape, card_color: pendingCardColor, card_text_color: pendingCardText }),
     });
     setThemeSaving(false);
     if (res.ok) {
@@ -302,7 +317,7 @@ export default function ProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-card"
-                style={{ background: theme.card, color: theme.text, borderColor: `${theme.label}28` }}
+                style={{ background: theme.card, color: theme.cardText, borderColor: `${theme.label}28` }}
               >
                 {ogImage && (
                   <img
@@ -364,7 +379,7 @@ export default function ProfilePage() {
             background: `${theme.card}f0`, backdropFilter: "blur(12px)",
             border: `1px solid ${theme.label}30`, borderBottom: "none",
             borderRadius: "8px 8px 0 0",
-            color: theme.text, fontSize: "0.85rem",
+            color: theme.cardText, fontSize: "0.85rem",
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 100, boxShadow: "0 -2px 8px #0002",
           }}
@@ -392,24 +407,24 @@ export default function ProfilePage() {
             style={{
               position: "absolute", top: 6, right: 8,
               background: "none", border: "none", cursor: "pointer",
-              color: theme.text, opacity: 0.4, fontSize: "1rem", lineHeight: 1,
+              color: theme.cardText, opacity: 0.4, fontSize: "1rem", lineHeight: 1,
               padding: "2px 4px",
             }}
           >✕</button>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Theme</span>
+          <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Theme</span>
 
           {/* Auto */}
           <button
             type="button"
             title="Auto"
-            onClick={() => { setPendingKey(null); setThemeSaved(false); }}
+            onClick={() => { setPendingKey(null); setPendingHeader(null); setPendingCardColor(null); setPendingCardText(null); setThemeSaved(false); }}
             style={{
               width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
-              background: "linear-gradient(135deg, #f78f1e 0%, #56b0e3 50%, #9b59b6 100%)",
-              border: "none", cursor: "pointer", padding: 0,
-              outline: pendingKey === null ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              background: "none", border: `2px dashed ${theme.cardText}55`,
+              cursor: "pointer", padding: 0,
+              outline: pendingKey === null ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
               outlineOffset: 2, transition: "outline-color 150ms",
             }}
           />
@@ -420,12 +435,18 @@ export default function ProfilePage() {
               key={key}
               type="button"
               title={THEME_NAMES[key]}
-              onClick={() => { setPendingKey(key); setPendingHeader(t.label); setThemeSaved(false); }}
+              onClick={() => {
+                const idx = pendingCardColor !== null ? generateCardPalette(theme.bg).indexOf(pendingCardColor) : -1;
+                setPendingKey(key);
+                setPendingHeader(t.label);
+                if (idx !== -1) setPendingCardColor(generateCardPalette(THEMES[key].bg)[idx]);
+                setThemeSaved(false);
+              }}
               style={{
                 width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
                 background: t.bg,
                 border: "none", cursor: "pointer", padding: 0,
-                outline: pendingKey === key ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outline: pendingKey === key ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
                 outlineOffset: 2, transition: "outline-color 150ms",
               }}
             />
@@ -436,13 +457,19 @@ export default function ProfilePage() {
             <span style={{
               display: "block", width: 26, height: 26, borderRadius: "50%",
               background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
-              outline: (pendingKey !== null && !THEMES[pendingKey]) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+              outline: (pendingKey !== null && !THEMES[pendingKey]) ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
               outlineOffset: 2, transition: "outline-color 150ms",
             }} />
             <input
               type="color"
               value={(pendingKey !== null && !THEMES[pendingKey]) ? pendingKey : "#ee3666"}
-              onChange={(e) => { setPendingKey(e.target.value); setThemeSaved(false); }}
+              onChange={(e) => {
+                const newKey = e.target.value;
+                const idx = pendingCardColor !== null ? generateCardPalette(theme.bg).indexOf(pendingCardColor) : -1;
+                setPendingKey(newKey);
+                if (idx !== -1) setPendingCardColor(generateCardPalette(bgForKey(newKey))[idx]);
+                setThemeSaved(false);
+              }}
               style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
             />
           </label>
@@ -450,7 +477,7 @@ export default function ProfilePage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Headers</span>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Headers</span>
             {HEADER_COLOR_PRESETS.map(({ name, color }) => (
               <button
                 key={name}
@@ -458,11 +485,11 @@ export default function ProfilePage() {
                 title={name}
                 onClick={() => { setPendingHeader(color); setThemeSaved(false); }}
                 style={{
-                  width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-                  background: color === null ? `linear-gradient(135deg, ${theme.text}66, ${theme.text}22)` : theme.card,
-                  border: color === null ? `2px dashed ${theme.text}44` : `1.5px solid ${theme.text}18`,
+                  width: color === null ? 26 : 34, height: color === null ? 26 : 34, borderRadius: "50%", flexShrink: 0,
+                  background: color === null ? "none" : theme.card,
+                  border: color === null ? `2px dashed ${theme.cardText}55` : `1.5px solid ${theme.cardText}18`,
                   cursor: "pointer", padding: 0,
-                  outline: pendingHeader === color ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outline: pendingHeader === color ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
                   outlineOffset: 2, transition: "outline-color 150ms",
                   color: color ?? "transparent",
                   fontSize: "1.1rem", fontWeight: 700,
@@ -476,7 +503,7 @@ export default function ProfilePage() {
               <span style={{
                 display: "block", width: 26, height: 26, borderRadius: "50%",
                 background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
-                outline: (pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                outline: (pendingHeader !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === pendingHeader)) ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
                 outlineOffset: 2, transition: "outline-color 150ms",
               }} />
               <input
@@ -488,9 +515,123 @@ export default function ProfilePage() {
             </label>
           </div>
 
+          {/* Card color picker */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Cards</span>
+            {/* Auto */}
+            <button
+              type="button"
+              title="Auto"
+              onClick={() => { setPendingCardColor(null); setPendingCardText(null); setThemeSaved(false); }}
+              style={{
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                background: "none", border: `2px dashed ${theme.cardText}55`,
+                cursor: "pointer", padding: 0,
+                outline: pendingCardColor === null ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }}
+            />
+            {/* Presets derived from current bg */}
+            {generateCardPalette(theme.bg).map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                title={hex}
+                onClick={() => { setPendingCardColor(hex); setPendingCardText(null); setThemeSaved(false); }}
+                style={{
+                  width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                  background: hex, border: `1.5px solid ${theme.cardText}20`,
+                  cursor: "pointer", padding: 0,
+                  outline: pendingCardColor === hex ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                  outlineOffset: 2, transition: "outline-color 150ms",
+                }}
+              />
+            ))}
+            {/* Custom picker */}
+            <label title="Custom card color" style={{ position: "relative", width: 26, height: 26, flexShrink: 0, cursor: "pointer" }}>
+              <span style={{
+                display: "block", width: 26, height: 26, borderRadius: "50%",
+                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                outline: (pendingCardColor !== null && !generateCardPalette(theme.bg).includes(pendingCardColor)) ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                outlineOffset: 2, transition: "outline-color 150ms",
+              }} />
+              <input
+                type="color"
+                value={pendingCardColor ?? "#ffffff"}
+                onChange={(e) => { setPendingCardColor(e.target.value); setPendingCardText(null); setThemeSaved(false); }}
+                style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              />
+            </label>
+            {/* Card text toggle */}
+            <button
+              type="button"
+              title="Card text color"
+              onClick={() => setCardTextOpen((o) => !o)}
+              style={{
+                marginLeft: "auto", flexShrink: 0,
+                background: "none", border: `1.5px solid ${theme.cardText}30`,
+                borderRadius: 6, padding: "2px 6px",
+                fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.06em",
+                color: pendingCardText ? theme.cardText : `${theme.cardText}55`,
+                cursor: "pointer", transition: "color 150ms",
+              }}
+            >Aa {cardTextOpen ? "▲" : "▼"}</button>
+          </div>
+
+          {/* Card text color row */}
+          {cardTextOpen && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", paddingLeft: "2.5rem" }}>
+              <span style={{ fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.4, flexShrink: 0 }}>Text</span>
+              {/* Auto */}
+              <button
+                type="button"
+                title="Auto"
+                onClick={() => { setPendingCardText(null); setThemeSaved(false); }}
+                style={{
+                  width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                  background: "none", border: `2px dashed ${theme.cardText}55`,
+                  cursor: "pointer", padding: 0,
+                  outline: pendingCardText === null ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                  outlineOffset: 2, transition: "outline-color 150ms",
+                }}
+              />
+              {/* Contextual swatches: page text, accent/label, header color */}
+              {[theme.text, theme.label, ...(pendingHeader ? [pendingHeader] : [])].filter((c, i, a) => a.indexOf(c) === i).map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  title={hex}
+                  onClick={() => { setPendingCardText(hex); setThemeSaved(false); }}
+                  style={{
+                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                    background: hex, border: `1.5px solid ${theme.cardText}20`,
+                    cursor: "pointer", padding: 0,
+                    outline: pendingCardText === hex ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                    outlineOffset: 2, transition: "outline-color 150ms",
+                  }}
+                />
+              ))}
+              {/* Custom text color picker */}
+              <label title="Custom card text color" style={{ position: "relative", width: 22, height: 22, flexShrink: 0, cursor: "pointer" }}>
+                <span style={{
+                  display: "block", width: 22, height: 22, borderRadius: "50%",
+                  background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                  outline: (pendingCardText !== null && ![theme.text, theme.label, pendingHeader].includes(pendingCardText)) ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                  outlineOffset: 2, transition: "outline-color 150ms",
+                }} />
+                <input
+                  type="color"
+                  value={pendingCardText ?? theme.cardText}
+                  onChange={(e) => { setPendingCardText(e.target.value); setThemeSaved(false); }}
+                  style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
+                />
+              </label>
+            </div>
+          )}
+
           {/* Avatar shape picker */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5, flexShrink: 0 }}>Shape</span>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Shape</span>
             {AVATAR_SHAPES.map((s) => (
               <button
                 key={s}
@@ -500,7 +641,7 @@ export default function ProfilePage() {
                 style={{
                   width: 34, height: 34, flexShrink: 0, background: "none", border: "none",
                   cursor: "pointer", padding: 2,
-                  outline: pendingShape === s ? `2.5px solid ${theme.text}` : "2.5px solid transparent",
+                  outline: pendingShape === s ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
                   outlineOffset: 2, borderRadius: 4, transition: "outline-color 150ms",
                 }}
               >
@@ -516,17 +657,22 @@ export default function ProfilePage() {
           </div>
 
           {/* Social color toggle */}
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={!pendingMono}
-              onChange={(e) => { setPendingMono(!e.target.checked); setThemeSaved(false); }}
-              style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.label }}
-            />
-            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5 }}>
-              Socials colors
-            </span>
-          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Socials colors</span>
+            <button
+              type="button"
+              title={pendingMono ? "Brand colors off" : "Brand colors on"}
+              onClick={() => { setPendingMono((m) => !m); setThemeSaved(false); }}
+              style={{
+                width: 18, height: 18, flexShrink: 0, background: "none", border: "none",
+                cursor: "pointer", padding: 0,
+                outline: !pendingMono ? `2px solid ${theme.cardText}` : "2px solid transparent",
+                outlineOffset: 2, borderRadius: "50%", transition: "outline-color 150ms",
+              }}
+            >
+              <div style={{ width: 18, height: 18, borderRadius: "50%", background: !pendingMono ? theme.label : `${theme.cardText}40`, transition: "background 150ms" }} />
+            </button>
+          </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
             {themeSaved && (

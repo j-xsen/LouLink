@@ -30,17 +30,18 @@ export type DirectoryMember = {
 export type ProfileTheme = {
   bg: string;
   card: string;
-  text: string;
+  text: string;     // text color for page background
+  cardText: string; // text color for card background
   label: string;
 };
 
 export const THEMES: Record<string, ProfileTheme> = {
-  ink:       { bg: "#f2efe8", card: "#fffef9", text: "#0a0a0a", label: "#0a0a0a" },
-  bluegrass: { bg: "#8ecfaa", card: "#ffffff", text: "#071a0e", label: "#1a6635" },
-  river:     { bg: "#8ab8e8", card: "#ffffff", text: "#081428", label: "#1a4fd6" },
-  bourbon:   { bg: "#f5a030", card: "#fffdf0", text: "#2c1800", label: "#8a4500" },
-  midnight:  { bg: "#0f1629", card: "#1a2744", text: "#e2eaf8", label: "#93b4f0" },
-  terminal:  { bg: "#0a0e08", card: "#111a0f", text: "#39ff14", label: "#39ff14" },
+  ink:       { bg: "#f2efe8", card: "#fffef9", text: "#0a0a0a", cardText: "#0a0a0a", label: "#0a0a0a" },
+  bluegrass: { bg: "#8ecfaa", card: "#ffffff", text: "#071a0e", cardText: "#071a0e", label: "#1a6635" },
+  river:     { bg: "#8ab8e8", card: "#ffffff", text: "#081428", cardText: "#081428", label: "#1a4fd6" },
+  bourbon:   { bg: "#f5a030", card: "#fffdf0", text: "#2c1800", cardText: "#2c1800", label: "#8a4500" },
+  midnight:  { bg: "#0f1629", card: "#1a2744", text: "#e2eaf8", cardText: "#e2eaf8", label: "#93b4f0" },
+  terminal:  { bg: "#0a0e08", card: "#111a0f", text: "#39ff14", cardText: "#39ff14", label: "#39ff14" },
 };
 
 export const THEME_NAMES: Record<string, string> = {
@@ -55,9 +56,11 @@ export const THEME_NAMES: Record<string, string> = {
 export const AVATAR_SHAPES = ["circle", "1", "5", "6", "7"] as const;
 export type AvatarShape = typeof AVATAR_SHAPES[number];
 
-// accent_color column stores "themeKeyOrHex|headerHex|mono|shape" — any part may be empty/absent
-export function parseAccentColor(raw: string | null): { themeKey: string | null; headerColor: string | null; monoSocial: boolean; avatarShape: AvatarShape } {
-  if (!raw) return { themeKey: null, headerColor: null, monoSocial: false, avatarShape: "circle" };
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+// accent_color column stores "themeKeyOrHex|headerHex|mono|shape|cardColor|cardTextColor" — any trailing part may be empty/absent
+export function parseAccentColor(raw: string | null): { themeKey: string | null; headerColor: string | null; monoSocial: boolean; avatarShape: AvatarShape; cardColor: string | null; cardTextColor: string | null } {
+  if (!raw) return { themeKey: null, headerColor: null, monoSocial: false, avatarShape: "circle", cardColor: null, cardTextColor: null };
   const parts = raw.split("|");
   const shapePart = parts[3] ?? "";
   return {
@@ -65,12 +68,24 @@ export function parseAccentColor(raw: string | null): { themeKey: string | null;
     headerColor: parts[1] || null,
     monoSocial: parts[2] === "mono",
     avatarShape: (AVATAR_SHAPES as readonly string[]).includes(shapePart) ? shapePart as AvatarShape : "circle",
+    cardColor: (parts[4] && HEX_RE.test(parts[4])) ? parts[4] : null,
+    cardTextColor: (parts[5] && HEX_RE.test(parts[5])) ? parts[5] : null,
   };
 }
 
-export function buildAccentColor(themeKey: string | null, headerColor: string | null, monoSocial: boolean, avatarShape: AvatarShape = "circle"): string | null {
+export function buildAccentColor(
+  themeKey: string | null,
+  headerColor: string | null,
+  monoSocial: boolean,
+  avatarShape: AvatarShape = "circle",
+  cardColor: string | null = null,
+  cardTextColor: string | null = null,
+): string | null {
   const monoPart = monoSocial ? "mono" : "";
   const shapePart = avatarShape !== "circle" ? avatarShape : "";
+  if (cardColor || cardTextColor) {
+    return `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}|${cardColor ?? ""}|${cardTextColor ?? ""}`;
+  }
   if (!themeKey && !headerColor && !monoPart && !shapePart) return null;
   if (shapePart) return `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}|${shapePart}`;
   if (monoPart) return `${themeKey ?? ""}|${headerColor ?? ""}|${monoPart}`;
