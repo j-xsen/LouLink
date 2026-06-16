@@ -96,9 +96,69 @@ export default function CreatePage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
   const [showNewForm, setShowNewForm] = useState(true);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  interface DragState {
+    index: number;
+    currentY: number;
+    cardLeft: number;
+    cardWidth: number;
+    grabOffsetY: number;
+  }
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const dragHandlePressed = useRef<number | null>(null);
+  const dragOverRef = useRef<number | null>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const dragIndex = drag?.index ?? null;
+
+  function startDrag(e: React.PointerEvent, i: number) {
+    e.preventDefault();
+    const el = cardRefs.current[i];
+    const rect = el?.getBoundingClientRect();
+    setDrag({
+      index: i,
+      currentY: e.clientY,
+      cardLeft: rect?.left ?? 0,
+      cardWidth: rect?.width ?? 300,
+      grabOffsetY: rect ? e.clientY - rect.top : 0,
+    });
+    dragOverRef.current = null;
+    setDragOverIndex(null);
+  }
+
+  useEffect(() => {
+    if (!drag) return;
+    const { index } = drag;
+
+    function onMove(e: PointerEvent) {
+      e.preventDefault();
+      setDrag(prev => prev ? { ...prev, currentY: e.clientY } : null);
+      // Cards stay in DOM (opacity 0) so positions are stable — hit-testing is accurate
+      let over: number | null = null;
+      for (let j = 0; j < cardRefs.current.length; j++) {
+        if (j === index) continue;
+        const el = cardRefs.current[j];
+        if (!el) continue;
+        const { top, bottom } = el.getBoundingClientRect();
+        if (e.clientY >= top && e.clientY <= bottom) { over = j; break; }
+      }
+      dragOverRef.current = over;
+      setDragOverIndex(over);
+    }
+
+    function onUp() {
+      const over = dragOverRef.current;
+      if (over !== null && over !== index) moveItem(index, over);
+      setDrag(null);
+      setDragOverIndex(null);
+      dragOverRef.current = null;
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [drag !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateItems(next: DraftItem[]) {
     setItems(next);
@@ -147,20 +207,12 @@ export default function CreatePage() {
   }
 
   function moveItem(from: number, to: number) {
-    const next = [...items];
-    next.splice(to, 0, next.splice(from, 1)[0]);
-    updateItems(next);
-  }
-
-  function dragCardStyle(i: number) {
-    const isOver = dragOverIndex === i && dragIndex !== null && dragIndex !== i;
-    return {
-      opacity: dragIndex === i ? 0.4 : 1,
-      outline: isOver ? "2px solid #f78f1e" : "none",
-      borderRadius: 14,
-      transform: isOver ? `translateY(${dragIndex! < i ? "-16px" : "16px"})` : "none",
-      transition: "transform 150ms ease",
-    };
+    setItems(prev => {
+      const next = [...prev];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      saveDraft({ items: next });
+      return next;
+    });
   }
 
   const fieldLabel: React.CSSProperties = {
@@ -193,89 +245,57 @@ export default function CreatePage() {
       {!profile && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: "0.9rem" }}>Add your links below. You can create an account when you're ready to save.</p>}
 
       <div id="link-list" style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
-        {items.map((item, i) => (
-          <div
-            key={i}
-            draggable
-            onDragStart={(e) => {
-              if (dragHandlePressed.current !== i) { e.preventDefault(); return; }
-              setDragIndex(i);
-            }}
-            onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
-            onDrop={() => {
-              if (dragIndex !== null && dragIndex !== i) moveItem(dragIndex, i);
-              setDragIndex(null);
-              setDragOverIndex(null);
-            }}
-            onDragEnd={() => { dragHandlePressed.current = null; setDragIndex(null); setDragOverIndex(null); }}
-            style={{ ...dragCardStyle(i), position: "relative" }}
-          >
-            {/* Transparent overlay during drag captures events that child inputs would absorb */}
-            {dragIndex !== null && dragIndex !== i && (
-              <div style={{ position: "absolute", inset: 0, zIndex: 1 }} />
-            )}
-
-            {item.kind === "header" ? (
-              <div style={{ background: "#fef3e2", border: "1px solid #f78f1e", borderLeft: "4px solid #f78f1e", borderRadius: 14, padding: "0.9rem 1rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                  <div
-                    style={{ color: "#f78f1e", cursor: "grab", display: "flex", userSelect: "none" }}
-                    onPointerDown={() => { dragHandlePressed.current = i; }}
-                    onPointerUp={() => { dragHandlePressed.current = null; }}
-                  >
-                    <DragHandle size={18} />
+        {items.map((item, i) => {
+          const isDragging = dragIndex === i;
+          const isTarget = dragOverIndex === i && dragIndex !== null;
+          return (
+            <div
+              key={i}
+              ref={(el) => { cardRefs.current[i] = el; }}
+              style={{ borderRadius: 14, opacity: isDragging ? 0 : 1, outline: isTarget ? "2px dashed #f78f1e" : "none", outlineOffset: 2 }}
+            >
+              {item.kind === "header" ? (
+                <div style={{ background: "#fef3e2", border: "1px solid #f78f1e", borderLeft: "4px solid #f78f1e", borderRadius: 14, padding: "0.9rem 1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <div style={{ color: "#f78f1e", cursor: "grab", display: "flex", userSelect: "none", touchAction: "none" }} onPointerDown={(e) => startDrag(e, i)}>
+                      <DragHandle size={18} />
+                    </div>
+                    <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#f78f1e", flex: 1 }}>Section</span>
+                    <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, color: "#f78f1e", fontSize: "1rem", padding: "0 0.25rem" }}>×</button>
                   </div>
-                  <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1rem", textTransform: "uppercase", letterSpacing: "0.08em", color: "#f78f1e", flex: 1 }}>Section</span>
-                  <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, color: "#f78f1e", fontSize: "1rem", padding: "0 0.25rem" }}>×</button>
-                </div>
-                <label>
-                  <span style={fieldLabel}>Label</span>
-                  <input
-                    type="text"
-                    value={item.title}
-                    onChange={(e) => updateItem(i, { title: e.target.value })}
-                  />
-                </label>
-              </div>
-            ) : (
-              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "0.9rem 1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                  <div
-                    style={{ color: "#d1d5db", cursor: "grab", display: "flex", userSelect: "none" }}
-                    onPointerDown={() => { dragHandlePressed.current = i; }}
-                    onPointerUp={() => { dragHandlePressed.current = null; }}
-                  >
-                    <DragHandle size={18} />
-                  </div>
-                  <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title || "Untitled"}</span>
-                  <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, fontSize: "1.1rem", padding: "0 0.25rem" }}>×</button>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                   <label>
-                    <span style={fieldLabel}>Title</span>
-                    <input
-                      type="text"
-                      value={item.title}
-                      onChange={(e) => updateItem(i, { title: e.target.value })}
-                    />
+                    <span style={fieldLabel}>Label</span>
+                    <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
                   </label>
-                  <label>
-                    <span style={fieldLabel}>URL</span>
-                    <input
-                      type="text"
-                      value={item.url}
-                      onChange={(e) => updateItem(i, { url: e.target.value })}
-                    />
-                  </label>
-                  <div>
-                    <span style={fieldLabel}>Icon</span>
-                    <IconPicker value={item.icon ?? ""} onChange={(v) => updateItem(i, { icon: v || undefined })} />
+                </div>
+              ) : (
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "0.9rem 1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <div style={{ color: "#d1d5db", cursor: "grab", display: "flex", userSelect: "none", touchAction: "none" }} onPointerDown={(e) => startDrag(e, i)}>
+                      <DragHandle size={18} />
+                    </div>
+                    <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title || "Untitled"}</span>
+                    <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, fontSize: "1.1rem", padding: "0 0.25rem" }}>×</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <label>
+                      <span style={fieldLabel}>Title</span>
+                      <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
+                    </label>
+                    <label>
+                      <span style={fieldLabel}>URL</span>
+                      <input type="text" value={item.url} onChange={(e) => updateItem(i, { url: e.target.value })} />
+                    </label>
+                    <div>
+                      <span style={fieldLabel}>Icon</span>
+                      <IconPicker value={item.icon ?? ""} onChange={(v) => updateItem(i, { icon: v || undefined })} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ marginTop: "1.25rem" }}>
@@ -404,6 +424,35 @@ export default function CreatePage() {
           </p>
         </div>
       )}
+
+      {/* Floating card that follows the pointer during drag */}
+      {drag !== null && (() => {
+        const item = items[drag.index];
+        return (
+          <div style={{
+            position: "fixed",
+            left: drag.cardLeft,
+            width: drag.cardWidth,
+            top: drag.currentY - drag.grabOffsetY,
+            zIndex: 1000,
+            pointerEvents: "none",
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 14,
+            boxShadow: "0 10px 36px rgba(0,0,0,0.18)",
+            padding: "0.9rem 1rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            opacity: 0.92,
+          }}>
+            <DragHandle size={18} />
+            <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {item.title || "Untitled"}
+            </span>
+          </div>
+        );
+      })()}
     </>
   );
 }
