@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CATEGORY_LABELS, type DirectoryMember } from "../types";
+import { CATEGORY_HIERARCHY, CATEGORY_PARENT, CATEGORY_GROUP_LABELS, type DirectoryMember } from "../types";
 import { AvatarImage } from "./Avatar";
 
 export function MemberCard({ member }: { member: DirectoryMember }) {
@@ -34,20 +34,20 @@ export function MemberCard({ member }: { member: DirectoryMember }) {
 
 export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const categoryOrder = Object.keys(CATEGORY_LABELS);
+  const groupOrder = CATEGORY_HIERARCHY.map((g) => g.key);
 
-  // Assign each member to its first matching category (in defined order)
+  // Assign each member to the parent group of their first known subcategory
   const groups: Record<string, DirectoryMember[]> = {};
-  for (const cat of categoryOrder) groups[cat] = [];
+  for (const g of groupOrder) groups[g] = [];
   const uncategorized: DirectoryMember[] = [];
 
   for (const m of members) {
-    const match = categoryOrder.find((c) => m.categories.includes(c));
-    if (match) groups[match].push(m);
+    const firstParent = m.categories.map((c) => CATEGORY_PARENT[c]).find((p) => p !== undefined);
+    if (firstParent && firstParent in groups) groups[firstParent].push(m);
     else uncategorized.push(m);
   }
 
-  const sections = categoryOrder.filter((c) => groups[c].length > 0);
+  const sections = groupOrder.filter((g) => groups[g].length > 0);
   const hasUncategorized = uncategorized.length > 0;
 
   const pillBase: React.CSSProperties = {
@@ -72,7 +72,9 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
   };
 
   const filteredMembers = activeFilter
-    ? members.filter((m) => m.categories.includes(activeFilter))
+    ? activeFilter === "__other"
+      ? uncategorized
+      : members.filter((m) => m.categories.some((c) => CATEGORY_PARENT[c] === activeFilter))
     : null;
 
   return (
@@ -86,14 +88,14 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
         >
           All
         </button>
-        {sections.map((cat) => (
+        {sections.map((groupKey) => (
           <button
-            key={cat}
+            key={groupKey}
             type="button"
-            style={{ ...pillBase, ...(activeFilter === cat ? pillActive : {}) }}
-            onClick={() => setActiveFilter(activeFilter === cat ? null : cat)}
+            style={{ ...pillBase, ...(activeFilter === groupKey ? pillActive : {}) }}
+            onClick={() => setActiveFilter(activeFilter === groupKey ? null : groupKey)}
           >
-            {CATEGORY_LABELS[cat]}
+            {CATEGORY_GROUP_LABELS[groupKey]}
           </button>
         ))}
         {hasUncategorized && (
@@ -119,8 +121,8 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
       ) : (
         /* Grouped "All" view */
         <>
-          {sections.map((cat) => (
-            <div key={cat}>
+          {sections.map((groupKey) => (
+            <div key={groupKey}>
               <div style={{
                 fontSize: "0.7rem",
                 fontWeight: 700,
@@ -129,10 +131,10 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
                 opacity: 0.45,
                 marginBottom: "0.5rem",
               }}>
-                {CATEGORY_LABELS[cat]}
+                {CATEGORY_GROUP_LABELS[groupKey]}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {groups[cat].map((m) => <MemberCard key={m.username} member={m} />)}
+                {groups[groupKey].map((m) => <MemberCard key={m.username} member={m} />)}
               </div>
             </div>
           ))}

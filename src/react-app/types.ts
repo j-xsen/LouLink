@@ -84,10 +84,82 @@ export const HEADER_COLOR_PRESETS: Array<{ name: string; color: string | null }>
   { name: "Purple", color: "#6b20e0" },
 ];
 
+export type CategoryGroup = { key: string; label: string; subs: { key: string; label: string }[] };
+
+export const CATEGORY_HIERARCHY: CategoryGroup[] = [
+  {
+    key: "artists",
+    label: "Artists",
+    subs: [
+      { key: "musician",     label: "Musician" },
+      { key: "composer",     label: "Composer" },
+      { key: "painter",      label: "Painter" },
+      { key: "sculptor",     label: "Sculptor" },
+      { key: "photographer", label: "Photographer" },
+      { key: "illustrator",  label: "Illustrator" },
+      { key: "filmmaker",    label: "Filmmaker" },
+      { key: "dancer",       label: "Dancer" },
+      { key: "writer",       label: "Writer / Poet" },
+    ],
+  },
+  {
+    key: "businesses",
+    label: "Businesses",
+    subs: [
+      { key: "retail",       label: "Retail" },
+      { key: "thrift",       label: "Thrift" },
+      { key: "restaurant",   label: "Restaurant" },
+      { key: "coffee-shop",  label: "Coffee Shop" },
+      { key: "bar",          label: "Bar / Nightlife" },
+      { key: "services",     label: "Services" },
+    ],
+  },
+  {
+    key: "media",
+    label: "Media",
+    subs: [
+      { key: "journalist",   label: "Journalist" },
+      { key: "reporter",     label: "Reporter" },
+      { key: "news-outlet",  label: "News Outlet" },
+      { key: "podcast",      label: "Podcast" },
+      { key: "blogger",      label: "Blogger" },
+    ],
+  },
+  {
+    key: "venues",
+    label: "Venues & Arts",
+    subs: [
+      { key: "music-venue",  label: "Music Venue" },
+      { key: "gallery",      label: "Art Gallery" },
+      { key: "event-space",  label: "Event Space" },
+    ],
+  },
+  {
+    key: "community",
+    label: "Community",
+    subs: [
+      { key: "nonprofit",    label: "Nonprofit" },
+      { key: "organization", label: "Organization" },
+      { key: "collective",   label: "Collective" },
+    ],
+  },
+];
+
+// subcategory slug → display label (includes legacy slugs for graceful display)
 export const CATEGORY_LABELS: Record<string, string> = {
+  ...Object.fromEntries(CATEGORY_HIERARCHY.flatMap((g) => g.subs.map((s) => [s.key, s.label]))),
+  // legacy slugs — display-only, can't be newly selected
   music: "Music",
   "visual-art": "Visual Art",
   food: "Food & Drink",
-  retail: "Retail",
-  community: "Community",
 };
+
+// subcategory slug → parent group key
+export const CATEGORY_PARENT: Record<string, string> = Object.fromEntries(
+  CATEGORY_HIERARCHY.flatMap((g) => g.subs.map((s) => [s.key, g.key]))
+);
+
+// parent group key → display label
+export const CATEGORY_GROUP_LABELS: Record<string, string> = Object.fromEntries(
+  CATEGORY_HIERARCHY.map((g) => [g.key, g.label])
+);

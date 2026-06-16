@@ -9,7 +9,13 @@ import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
 import { AvatarImage } from "../components/Avatar";
-import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
+import { CATEGORY_HIERARCHY, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
+
+const GROUP_COLORS: Record<string, string> = {
+  artists: "#ee3666", businesses: "#f78f1e", media: "#56b0e3",
+  venues: "#a78bfa", community: "#d88cbb",
+};
+
 
 function resolvePreviewTheme(accentColor: string | null): ProfileTheme {
   if (accentColor && THEMES[accentColor]) return THEMES[accentColor];
@@ -37,6 +43,7 @@ export default function Settings() {
   const [bioSuccess, setBioSuccess] = useState(false);
   const [bioSubmitting, setBioSubmitting] = useState(false);
   const [categories, setCategories] = useState<string[]>(profile?.categories ?? []);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState("");
   const [categorySuccess, setCategorySuccess] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
@@ -186,9 +193,9 @@ export default function Settings() {
               }}
             />
             <p style={{ textAlign: "center" }}>
-              <button type="button" onClick={() => document.getElementById("avatar-upload")?.click()}>
+              <BlobButton type="button" blob="D" from="#56b0e3" to="#a78bfa" onClick={() => document.getElementById("avatar-upload")?.click()}>
                 {avatarUrl ? "Change photo" : "Upload photo"}
-              </button>
+              </BlobButton>
             </p>
           </div>
         )}
@@ -361,7 +368,7 @@ export default function Settings() {
           {appearanceError && <p style={{ textAlign: "center" }}><strong>{appearanceError}</strong></p>}
           {appearanceSuccess && <p style={{ textAlign: "center" }}>Appearance saved!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton disabled={appearanceSubmitting}>Save appearance</BlobButton>
+            <BlobButton blob="E" disabled={appearanceSubmitting} from="#f78f1e" to="#ee3666">Save appearance</BlobButton>
           </p>
         </form>
       </div>
@@ -384,7 +391,7 @@ export default function Settings() {
           {bioError && <p style={{ textAlign: "center" }}><strong>{bioError}</strong></p>}
           {bioSuccess && <p style={{ textAlign: "center" }}>Bio updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton disabled={bioSubmitting} from="#56b0e3" to="#d88cbb">Save bio</BlobButton>
+            <BlobButton blob="F" disabled={bioSubmitting} from="#d88cbb" to="#56b0e3">Save bio</BlobButton>
           </p>
         </form>
       </div>
@@ -393,35 +400,79 @@ export default function Settings() {
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Categories</h2>
         <form onSubmit={handleCategorySubmit}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem", justifyContent: "center", padding: "0.75rem 0 1.25rem" }}>
-            {Object.entries(CATEGORY_LABELS).map(([value, label], i) => {
-              const colors = ["#f78f1e", "#d88cbb", "#ee3666", "#56b0e3", "#d88cbb"];
+          {/* Parent group buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem", justifyContent: "center", padding: "0.75rem 0 0.5rem" }}>
+            {CATEGORY_HIERARCHY.map((group, gi) => {
+              const isOpen = openGroup === group.key;
+              const selCount = group.subs.filter((s) => categories.includes(s.key)).length;
+              const color = GROUP_COLORS[group.key] ?? "#888";
               const rotations = ["-2deg", "1.5deg", "-1.2deg", "2deg", "-1.8deg"];
-              const paddings = ["0.45rem 1.2rem", "0.5rem 1rem", "0.4rem 1.3rem", "0.5rem 1.1rem", "0.45rem 0.95rem"];
-              const selected = categories.includes(value);
-              const color = colors[i];
               return (
-                <label key={value} style={{
-                  display: "inline-flex", alignItems: "center", cursor: "pointer",
-                  padding: paddings[i], borderRadius: 100,
-                  border: `2px solid ${color}`,
-                  background: selected ? color : "transparent",
-                  color: selected ? "#fff" : color,
-                  fontWeight: 700, fontSize: "1rem", letterSpacing: "0.07em", textTransform: "uppercase",
-                  transform: `rotate(${rotations[i]})`,
-                  transition: "background 150ms ease, color 150ms ease",
-                  userSelect: "none", fontFamily: "'Aladin', Georgia, serif",
-                }}>
-                  <input type="checkbox" checked={selected} onChange={() => toggleCategory(value)} style={{ display: "none" }} />
-                  {label}
-                </label>
+                <button
+                  key={group.key}
+                  type="button"
+                  onClick={() => setOpenGroup(isOpen ? null : group.key)}
+                  style={{
+                    padding: "0.45rem 1.2rem", borderRadius: 100,
+                    border: `2px solid ${color}`,
+                    background: isOpen || selCount > 0 ? color : "transparent",
+                    color: isOpen || selCount > 0 ? "#fff" : color,
+                    fontWeight: 700, fontSize: "1rem", letterSpacing: "0.07em", textTransform: "uppercase",
+                    fontFamily: "'Aladin', Georgia, serif", cursor: "pointer",
+                    transition: "background 150ms ease, color 150ms ease",
+                    transform: `rotate(${rotations[gi % rotations.length]})`,
+                    position: "relative",
+                  }}
+                >
+                  {group.label}
+                  {selCount > 0 && !isOpen && (
+                    <span style={{
+                      position: "absolute", top: "-7px", right: "-7px",
+                      width: "18px", height: "18px", borderRadius: "50%",
+                      background: "#fff", color, border: `1.5px solid ${color}`,
+                      fontSize: "0.65rem", fontWeight: 800, fontFamily: "system-ui, sans-serif",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>{selCount}</span>
+                  )}
+                </button>
               );
             })}
           </div>
+
+          {/* Subcategory pills for the open group */}
+          {openGroup && (() => {
+            const group = CATEGORY_HIERARCHY.find((g) => g.key === openGroup)!;
+            const color = GROUP_COLORS[openGroup] ?? "#888";
+            const rotations = ["-2deg", "1.5deg", "-1.2deg", "2deg", "-1.8deg", "1deg", "-0.8deg", "2.2deg", "-1.5deg"];
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", justifyContent: "center", padding: "1.5rem 0 1.25rem" }}>
+                {group.subs.map((sub, i) => {
+                  const selected = categories.includes(sub.key);
+                  return (
+                    <label key={sub.key} style={{
+                      display: "inline-flex", alignItems: "center", cursor: "pointer",
+                      padding: "0.42rem 1.05rem", borderRadius: 100,
+                      border: `2px solid ${color}`,
+                      background: selected ? color : "transparent",
+                      color: selected ? "#fff" : color,
+                      fontWeight: 700, fontSize: "0.92rem", letterSpacing: "0.06em", textTransform: "uppercase",
+                      transform: `rotate(${rotations[i % rotations.length]})`,
+                      transition: "background 150ms ease, color 150ms ease",
+                      userSelect: "none", fontFamily: "'Aladin', Georgia, serif",
+                    }}>
+                      <input type="checkbox" checked={selected} onChange={() => toggleCategory(sub.key)} style={{ display: "none" }} />
+                      {sub.label}
+                    </label>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {categoryError && <p style={{ textAlign: "center" }}><strong>{categoryError}</strong></p>}
           {categorySuccess && <p style={{ textAlign: "center" }}>Categories updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="B" disabled={categorySubmitting}>Save categories</BlobButton>
+            <BlobButton blob="G" disabled={categorySubmitting} from="#56b0e3" to="#d88cbb">Save categories</BlobButton>
           </p>
         </form>
       </div>
@@ -451,7 +502,7 @@ export default function Settings() {
           {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
           {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="C" reversed disabled={!canSubmit}>Update username</BlobButton>
+            <BlobButton blob="B" disabled={!canSubmit} from="#ee3666" to="#a78bfa">Update username</BlobButton>
           </p>
         </form>
       </div>

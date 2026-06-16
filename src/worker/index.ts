@@ -191,7 +191,13 @@ app.put("/api/me/links", requireAuth, async (c) => {
 app.put("/api/me/categories", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ categories?: unknown }>(c);
-  const VALID_CATEGORIES = new Set(["music", "visual-art", "food", "retail", "community"]);
+  const VALID_CATEGORIES = new Set([
+    "musician", "composer", "painter", "sculptor", "photographer", "illustrator", "filmmaker", "dancer", "writer",
+    "retail", "thrift", "restaurant", "coffee-shop", "bar", "services",
+    "journalist", "reporter", "news-outlet", "podcast", "blogger",
+    "music-venue", "gallery", "event-space",
+    "nonprofit", "organization", "collective",
+  ]);
   const raw = body?.categories;
   if (!Array.isArray(raw)) return c.json({ error: "categories must be an array" }, 400);
   const categories = raw.filter((v): v is string => typeof v === "string" && VALID_CATEGORIES.has(v));
@@ -481,6 +487,19 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Inlined here because the worker can't import from the React app tsconfig target.
+const WORKER_CATEGORY_LABELS: Record<string, string> = {
+  musician: "Musician", composer: "Composer", painter: "Painter", sculptor: "Sculptor",
+  photographer: "Photographer", illustrator: "Illustrator", filmmaker: "Filmmaker",
+  dancer: "Dancer", writer: "Writer / Poet",
+  retail: "Retail", thrift: "Thrift", restaurant: "Restaurant",
+  "coffee-shop": "Coffee Shop", bar: "Bar / Nightlife", services: "Services",
+  journalist: "Journalist", reporter: "Reporter", "news-outlet": "News Outlet",
+  podcast: "Podcast", blogger: "Blogger",
+  "music-venue": "Music Venue", gallery: "Art Gallery", "event-space": "Event Space",
+  nonprofit: "Nonprofit", organization: "Organization", collective: "Collective",
+};
+
 app.get("/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   const assetResp = await c.env.ASSETS.fetch(c.req.raw);
@@ -489,28 +508,43 @@ app.get("/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT display_name, bio FROM public.profiles WHERE username = ${username}
+    SELECT display_name, bio, categories FROM public.profiles WHERE username = ${username}
   `;
   if (!profile) return mutableAsset();
 
   const displayName = profile.display_name as string;
-  const rawBio = (profile.bio as string | null) ?? `Explore ${displayName}'s links on LouLink`;
-  const bio = rawBio.length > 125 ? rawBio.slice(0, 122) + "…" : rawBio;
+  const rawCategories = (profile.categories as string[] | null) ?? [];
+  const categoryLabels = rawCategories
+    .map((c) => WORKER_CATEGORY_LABELS[c])
+    .filter((l): l is string => Boolean(l));
   const title = `${displayName} | LouLink`;
   const url = `https://loul.ink/${username}`;
 
+  // Build category-first description for SEO: "Musician & Photographer in Louisville — Name. Bio…"
+  let description: string;
+  if (categoryLabels.length > 0) {
+    const cats = categoryLabels.slice(0, 2).join(" & ");
+    const bioText = (profile.bio as string | null)?.trim() ?? "";
+    description = bioText
+      ? `${cats} in Louisville — ${displayName}. ${bioText}`
+      : `${cats} in Louisville — ${displayName}. Discover their links on LouLink.`;
+  } else {
+    description = (profile.bio as string | null)?.trim() || `Explore ${displayName}'s links on LouLink`;
+  }
+  if (description.length > 155) description = description.slice(0, 152) + "…";
+
   const injected = [
     `<title>${escHtml(title)}</title>`,
-    `<meta name="description" content="${escHtml(bio)}">`,
+    `<meta name="description" content="${escHtml(description)}">`,
     `<meta property="og:site_name" content="LouLink">`,
     `<meta property="og:title" content="${escHtml(title)}">`,
-    `<meta property="og:description" content="${escHtml(bio)}">`,
+    `<meta property="og:description" content="${escHtml(description)}">`,
     `<meta property="og:url" content="${url}">`,
     `<meta property="og:type" content="profile">`,
     `<meta property="og:image" content="https://loul.ink/og-image.jpg">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escHtml(title)}">`,
-    `<meta name="twitter:description" content="${escHtml(bio)}">`,
+    `<meta name="twitter:description" content="${escHtml(description)}">`,
     `<meta name="twitter:image" content="https://loul.ink/og-image.jpg">`,
     `<link rel="canonical" href="${url}">`,
   ].join("\n\t\t");
