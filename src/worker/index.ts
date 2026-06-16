@@ -9,6 +9,7 @@ const MAX_LINKS = 50;
 const MAX_LINK_TITLE = 100;
 const MAX_LINK_URL = 2048;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const OG_BODY_LIMIT = 512 * 1024; // 512 KB — caps external page reads in /api/og
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 function mimeToExt(mime: string): string {
@@ -268,8 +269,8 @@ app.put("/api/me/social-links", requireAuth, async (c) => {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     for (const [key, val] of Object.entries(raw)) {
       if (SOCIAL_PLATFORMS.has(key) && typeof val === "string") {
-        const trimmed = val.trim().slice(0, 500);
-        if (trimmed) filtered[key] = trimmed;
+        const safe = sanitizeUrl(val);
+        if (safe) filtered[key] = safe;
       }
     }
   }
@@ -333,6 +334,14 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (body.byteLength > MAX_AVATAR_BYTES) {
     return c.json({ error: "File exceeds 5 MB limit" }, 413);
   }
+  const bytes = new Uint8Array(body, 0, Math.min(12, body.byteLength));
+  const validMagic =
+    (mimeType === "image/jpeg" && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) ||
+    (mimeType === "image/png"  && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) ||
+    (mimeType === "image/gif"  && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) ||
+    (mimeType === "image/webp" && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+                                  bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50);
+  if (!validMagic) return c.json({ error: "File content does not match declared image type" }, 415);
   const sql = createDb(c.env.DATABASE_URL);
   const [existing] = await sql`SELECT username, avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
   if (!existing) return c.json({ error: "Profile not found" }, 404);
@@ -364,6 +373,9 @@ app.put("/api/me/directory-visibility", requireAuth, async (c) => {
 });
 
 app.get("/api/username/:username/available", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  if (!success) return c.json({ error: "Too many requests" }, 429);
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
 
@@ -373,6 +385,9 @@ app.get("/api/username/:username/available", async (c) => {
 });
 
 app.get("/api/profile/:username", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  if (!success) return c.json({ error: "Too many requests" }, 429);
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
 
@@ -414,6 +429,7 @@ app.get("/avatars/*", async (c) => {
     headers: {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=300, s-maxage=3600",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 });
@@ -421,6 +437,9 @@ app.get("/avatars/*", async (c) => {
 // OG meta — used by the public profile page to show link preview thumbnails.
 // Fetches up to the first ~64 KB of the target page and extracts og:image.
 app.get("/api/og", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = await c.env.OG_RATE_LIMITER.limit({ key: ip });
+  if (!success) return c.json({ error: "Too many requests" }, 429);
   const url = sanitizeUrl(c.req.query("url") ?? "");
   if (!url) return c.json({ ogImage: null }, 400);
 
@@ -436,6 +455,16 @@ app.get("/api/og", async (c) => {
     clearTimeout(timer);
     if (res.ok) {
       const finalUrl = res.url || url; // after redirects
+      // Limit body reads to OG_BODY_LIMIT to prevent large pages from exhausting Worker memory.
+      let ogBytes = 0;
+      const limiter = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          ogBytes += chunk.byteLength;
+          if (ogBytes > OG_BODY_LIMIT) { controller.terminate(); }
+          else { controller.enqueue(chunk); }
+        },
+      });
+      const limited = new Response(res.body?.pipeThrough(limiter) ?? null, { headers: new Headers(res.headers) });
       // Use an array so closure mutations aren't confused by TS narrowing
       const found: string[] = [];
       await new HTMLRewriter()
@@ -449,7 +478,7 @@ app.get("/api/og", async (c) => {
             }
           },
         })
-        .transform(res)
+        .transform(limited)
         .arrayBuffer();
       let raw: string | null = found[0] ?? null;
       // Resolve relative URLs against the final page origin
@@ -467,6 +496,9 @@ app.get("/api/og", async (c) => {
 });
 
 app.get("/api/directory", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  if (!success) return c.json({ error: "Too many requests" }, 429);
   const cacheKey = new URL(c.req.url).origin + "/api/directory";
   const cached = await caches.default.match(cacheKey);
   if (cached) return new Response(cached.body, { status: cached.status, statusText: cached.statusText, headers: new Headers(cached.headers) });
@@ -554,14 +586,14 @@ app.get("/:username", async (c) => {
     `<meta property="og:site_name" content="LouLink">`,
     `<meta property="og:title" content="${escHtml(title)}">`,
     `<meta property="og:description" content="${escHtml(description)}">`,
-    `<meta property="og:url" content="${url}">`,
+    `<meta property="og:url" content="${escHtml(url)}">`,
     `<meta property="og:type" content="profile">`,
     `<meta property="og:image" content="https://loul.ink/og-image.jpg">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escHtml(title)}">`,
     `<meta name="twitter:description" content="${escHtml(description)}">`,
     `<meta name="twitter:image" content="https://loul.ink/og-image.jpg">`,
-    `<link rel="canonical" href="${url}">`,
+    `<link rel="canonical" href="${escHtml(url)}">`,
   ].join("\n\t\t");
 
   return new HTMLRewriter()
