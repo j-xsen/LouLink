@@ -98,6 +98,8 @@ Raw analytics events. Rows are purged after 30 days by a nightly Cron Trigger (s
 | `os` | `text` | Parsed from User-Agent |
 | `device_type` | `text` | `desktop`, `mobile`, or `tablet` |
 | `referrer` | `text` | From `Referer` header, nullable |
+| `visit_kind` | `text` | `direct`, `social`, `search`, or `referral` — classified from referrer |
+| `duration_ms` | `integer` | Time on page in ms, sent via `navigator.sendBeacon` on unmount; capped at 4 hours |
 
 ### `public.page_view_daily`
 
@@ -112,22 +114,72 @@ Aggregated rollups kept indefinitely. One row per profile per calendar day, writ
 | `by_country` | `jsonb` | `{ "US": 42, "CA": 3 }` |
 | `by_city` | `jsonb` | `{ "Louisville": 38, "Lexington": 4 }` |
 | `by_browser` | `jsonb` | `{ "Chrome": 30, "Safari": 12 }` |
+| `by_os` | `jsonb` | `{ "iOS": 20, "Android": 10 }` |
 | `by_device` | `jsonb` | `{ "mobile": 25, "desktop": 17 }` |
 | `by_referrer` | `jsonb` | `{ "instagram.com": 18, "direct": 24 }` |
+| `by_visit_kind` | `jsonb` | `{ "social": 18, "direct": 24, "search": 5, "referral": 3 }` |
+| `avg_duration_ms` | `integer` | Weighted average time on page for that day, nullable |
 
 Unique constraint on `(profile_id, day)` — each day is written once and never updated.
+
+### `public.link_click_events`
+
+Raw link click events. Rows are purged after 30 days alongside page view events. `profile_id` is denormalized to avoid joins in the nightly cron.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PRIMARY KEY | Default `gen_random_uuid()` |
+| `link_id` | `uuid` NOT NULL | FK → `public.links(id)` ON DELETE CASCADE |
+| `profile_id` | `uuid` NOT NULL | FK → `public.profiles(user_id)` ON DELETE CASCADE — denormalized |
+| `occurred_at` | `timestamptz` DEFAULT now() | When the click happened |
+| `country` | `text` | From `request.cf.country` |
+| `referrer` | `text` | From `Referer` header, nullable |
+| `visit_kind` | `text` | `direct`, `social`, `search`, or `referral` |
+
+### `public.link_click_daily`
+
+Aggregated link click rollups kept indefinitely. One row per link per calendar day.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `uuid` PRIMARY KEY | Default `gen_random_uuid()` |
+| `link_id` | `uuid` NOT NULL | FK → `public.links(id)` ON DELETE CASCADE |
+| `profile_id` | `uuid` NOT NULL | FK → `public.profiles(user_id)` ON DELETE CASCADE |
+| `day` | `date` NOT NULL | The calendar day being summarized |
+| `total_clicks` | `integer` NOT NULL | Total clicks on this link that day |
+| `by_country` | `jsonb` | `{ "US": 10, "CA": 2 }` |
+
+Unique constraint on `(link_id, day)`.
 
 ## Indexes
 
 ```sql
+-- profiles
 CREATE UNIQUE INDEX profiles_username_idx ON public.profiles (username);
-CREATE INDEX profiles_verified_category_idx ON public.profiles (category) WHERE verified = true;
+CREATE INDEX profiles_verified_category_idx ON public.profiles (categories) WHERE verified = true;
+
+-- links
 CREATE INDEX links_user_sort_idx ON public.links (user_id, sort_order ASC);
+
+-- page_view_events
 CREATE INDEX page_view_events_profile_time_idx ON public.page_view_events (profile_id, occurred_at DESC);
+CREATE INDEX page_view_events_occurred_at_idx  ON public.page_view_events (occurred_at ASC);
+
+-- page_view_daily
 CREATE UNIQUE INDEX page_view_daily_profile_day_idx ON public.page_view_daily (profile_id, day);
+CREATE INDEX        page_view_daily_day_idx          ON public.page_view_daily (day ASC);
+
+-- link_click_events
+CREATE INDEX link_click_events_link_time_idx    ON public.link_click_events (link_id, occurred_at DESC);
+CREATE INDEX link_click_events_profile_time_idx ON public.link_click_events (profile_id, occurred_at DESC);
+CREATE INDEX link_click_events_occurred_at_idx  ON public.link_click_events (occurred_at ASC);
+
+-- link_click_daily
+CREATE UNIQUE INDEX link_click_daily_link_day_idx    ON public.link_click_daily (link_id, day);
+CREATE INDEX        link_click_daily_profile_day_idx ON public.link_click_daily (profile_id, day DESC);
 ```
 
-The partial index on `profiles` makes the home page directory query (all verified profiles) efficient.
+The partial index on `profiles` makes the home page directory query (all verified profiles) efficient. The `occurred_at ASC` indexes on raw event tables support the nightly cron's range-delete queries.
 
 ## Common Query Patterns
 

@@ -21,27 +21,38 @@ This builds the Worker and uploads it to Cloudflare. The `dist/client/` static a
   "main": "./src/worker/index.ts",
   "compatibility_date": "2025-10-08",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
   "assets": {
     "directory": "./dist/client",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  "r2_buckets": [{ "binding": "AVATAR_BUCKET", "bucket_name": "loulink-avatars" }],
+  "triggers": { "crons": ["0 6 * * *"] },
+  "unsafe": {
+    "bindings": [
+      { "name": "OG_RATE_LIMITER",      "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 20,  "period": 60 } },
+      { "name": "UNAUTHED_RATE_LIMITER", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 100, "period": 60 } }
+    ]
   }
 }
 ```
 
-- `nodejs_compat` flag enables Node.js compatibility APIs in the Worker runtime (needed for some npm packages)
-- `not_found_handling: single-page-application` means any path not matching a static file returns `index.html`, enabling React Router client-side navigation
+- `nodejs_compat` flag enables Node.js compatibility APIs in the Worker runtime
+- `not_found_handling: single-page-application` returns `index.html` for any path not matching a static file, enabling React Router client-side navigation
 - `observability.enabled: true` turns on Cloudflare's built-in Worker analytics and logging
+- `triggers.crons` registers the nightly analytics cron (see Architecture docs)
+- `unsafe.bindings` provisions the two rate limiter namespaces (Cloudflare Workers Rate Limiting API)
 
 ## Environment Variables & Secrets
 
 Local development uses `.dev.vars` (gitignored). Production values are Wrangler secrets.
 
 ```bash
-# Add a secret to production
+# Add secrets to production
 wrangler secret put DATABASE_URL
-wrangler secret put CONTENTFUL_SPACE_ID
-wrangler secret put CONTENTFUL_DELIVERY_TOKEN
-wrangler secret put CONTENTFUL_MANAGEMENT_TOKEN
+wrangler secret put AUTH_JWKS_URL
 
 # List all secrets
 wrangler secret list
@@ -52,10 +63,10 @@ After adding secrets, run `pnpm cf-typegen` to regenerate `worker-configuration.
 **.dev.vars format:**
 ```
 DATABASE_URL=postgresql://...
-CONTENTFUL_SPACE_ID=abc123
-CONTENTFUL_DELIVERY_TOKEN=...
-CONTENTFUL_MANAGEMENT_TOKEN=...
+AUTH_JWKS_URL=https://...neonauth.../neondb/auth/.well-known/jwks.json
 ```
+
+`VITE_AUTH_URL` (the Better Auth client URL for the frontend) is not a Wrangler secret — it goes in `.env.local` and is baked into the React bundle at build time.
 
 ## Check Before Deploy
 

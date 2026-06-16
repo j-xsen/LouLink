@@ -32,13 +32,26 @@ wrangler secret put AUTH_JWKS_URL
 
 ## `requireAuth` Middleware
 
-The middleware lives at `src/worker/auth.ts`:
+The middleware lives at `src/worker/auth.ts`. It rejects requests without a valid JWT with `401`.
 
 ```ts
 import { requireAuth } from "./auth";
 
 app.put("/api/profiles/:username", requireAuth, async (c) => {
   const userId = c.get("userId"); // Better Auth user ID
+  // ...
+});
+```
+
+## `optionalAuth` Middleware
+
+Also in `src/worker/auth.ts`. Like `requireAuth` but never rejects — if a valid JWT is present it sets `c.get("userId")`; if absent or invalid it sets it to `null`. Used on public analytics tracking routes so the handler can detect owner requests and drop self-views/self-clicks without blocking unauthenticated visitors.
+
+```ts
+import { optionalAuth } from "./auth";
+
+app.post("/api/track/view", optionalAuth, async (c) => {
+  const userId = c.get("userId"); // string | null
   // ...
 });
 ```

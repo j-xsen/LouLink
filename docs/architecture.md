@@ -39,10 +39,13 @@ src/
       SignIn.tsx          # Sign in form
       SignUp.tsx          # Account creation + onboarding (calls POST /api/onboarding)
       Settings.tsx        # Avatar, bio, categories, username change
-      ProfilePage.tsx     # Public /:username profile page
+      ProfilePage.tsx     # Public /:username profile page — fires view/duration/click beacons
+      Analytics.tsx       # /analytics dashboard — stat cards, bar charts, link performance table
     assets/               # SVG logos, shape blobs, brand icons
   worker/
     index.ts              # Hono API — the Worker entry point
+    analytics.ts          # isBot(), parseUserAgent(), classifyReferrer(), mergeJsonbCounts()
+    cron.ts               # handleScheduled() — nightly rollup aggregation + raw event purge
 ```
 
 ## Two Compilation Targets
@@ -71,23 +74,29 @@ src/
 All API routes live in `src/worker/index.ts`. Route pattern:
 
 ```
-GET  /api/                            → health check
-GET  /api/me                          → current user's profile (auth-gated)
-POST /api/onboarding                  → create profile + initial links (auth-gated)
-PUT  /api/me/links                    → replace all links in bulk (auth-gated)
-PUT  /api/me/categories               → update categories array (auth-gated)
-PUT  /api/me/username                 → change username (auth-gated)
-POST /api/me/avatar                   → upload avatar to R2 (auth-gated)
-GET  /api/username/:username/available → username availability check (public)
-GET  /api/profile/:username           → public profile + links
-GET  /api/directory                   → all verified users, ordered by display_name
-GET  /api/og                          → fetch og:image from an external URL (proxy)
-GET  /avatars/*                       → serve R2 avatar objects
-GET  /:username                       → SPA with server-injected OG meta tags
-GET  *                                → static assets / SPA fallback
+GET  /api/                             → health check
+GET  /api/me                           → current user's profile (auth-gated)
+POST /api/onboarding                   → create profile + initial links (auth-gated)
+PUT  /api/me/links                     → replace all links in bulk (auth-gated)
+PUT  /api/me/categories                → update categories array (auth-gated)
+PUT  /api/me/username                  → change username (auth-gated)
+POST /api/me/avatar                    → upload avatar to R2 (auth-gated)
+GET  /api/me/analytics                 → analytics dashboard data, ?period=7d|30d|90d|all (auth-gated)
+GET  /api/username/:username/available → username availability check (public, rate-limited)
+GET  /api/profile/:username            → public profile + links (public, rate-limited)
+GET  /api/directory                    → all verified users, ordered by display_name (public, rate-limited)
+GET  /api/og                           → fetch og:image from an external URL (public, rate-limited)
+POST /api/track/view                   → record a page view event (public, bot-filtered, self-view prevention)
+POST /api/track/duration               → update duration_ms on an existing view event via sendBeacon
+POST /api/track/click                  → record a link click event (public, bot-filtered, self-click prevention)
+GET  /avatars/*                        → serve R2 avatar objects
+GET  /:username                        → SPA with server-injected OG meta tags
+GET  *                                 → static assets / SPA fallback
 ```
 
 Note: link management is bulk-replace only (`PUT /api/me/links` deletes all existing links and re-inserts the full array). There is no per-link create/update/delete endpoint.
+
+Analytics tracking routes accept an optional `Authorization` header — if the JWT matches the profile owner, the event is silently dropped (self-view/self-click prevention). Bots are also filtered by User-Agent before any DB write.
 
 Cloudflare bindings (secrets, R2) are accessed via `c.env` inside Hono handlers. Add new bindings to `wrangler.json` first, then run `pnpm cf-typegen` to update the `Env` type.
 
@@ -110,7 +119,27 @@ React Router handles client-side navigation. Routes:
 /signup    → SignUp + profile creation
 /create    → CreatePage: link builder (works without an account; draft saved to localStorage)
 /settings  → Settings: avatar upload, categories, username change (RequireProfile guard)
+/analytics → Analytics: views/clicks dashboard (RequireProfile guard)
 /:username → ProfilePage: public profile
 ```
 
 The SPA fallback in `wrangler.json` (`"not_found_handling": "single-page-application"`) ensures all unmatched routes return `index.html`, so deep links work correctly.
+
+## Cron Trigger
+
+`wrangler.json` registers a single Cron Trigger: `"0 6 * * *"` (06:00 UTC daily, which is 1–2 AM Louisville time). The Worker exports `scheduled: handleScheduled` alongside `fetch: app.fetch`.
+
+`handleScheduled` (in `src/worker/cron.ts`) runs two operations each night:
+1. Aggregates the previous day's raw events from `page_view_events` and `link_click_events` into their respective `_daily` rollup tables.
+2. Purges events older than 30 days from both raw event tables.
+
+## Rate Limiting
+
+Two Cloudflare Workers rate limiter bindings are configured in `wrangler.json` under `unsafe.bindings`:
+
+| Binding | Limit | Applied to |
+|---|---|---|
+| `OG_RATE_LIMITER` | 20 req/min | `GET /api/og` |
+| `UNAUTHED_RATE_LIMITER` | 100 req/min | `GET /api/profile/:username`, `GET /api/directory`, `GET /api/username/:username/available` |
+
+These use the Cloudflare Workers rate limiting API (namespace IDs `1001` and `1002`). They are keyed per-IP automatically.
