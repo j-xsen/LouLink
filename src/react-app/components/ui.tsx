@@ -112,9 +112,9 @@ export function PageHeader() {
 export function ShapeTitle({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ textAlign: "center", marginTop: "1.75rem" }}>
-      <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 52, minWidth: 160 }}>
+      <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", height: 68, minWidth: 190 }}>
         <img src={shape2} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", pointerEvents: "none", zIndex: 0 }} />
-        <span style={{ position: "relative", zIndex: 1, fontSize: "1.5rem", fontFamily: "'Aladin', Georgia, serif", paddingTop: "4px", textTransform: "uppercase", letterSpacing: "0.05em", color: "#12080b", padding: "0 1.75rem" }}>
+        <span style={{ position: "relative", zIndex: 1, fontSize: "1.9rem", fontFamily: "'Aladin', Georgia, serif", textTransform: "uppercase", letterSpacing: "0.05em", color: "#12080b", padding: "0 2rem", paddingTop: "5px" }}>
           {children}
         </span>
       </div>

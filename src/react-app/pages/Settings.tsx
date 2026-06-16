@@ -193,7 +193,7 @@ export default function Settings() {
               }}
             />
             <p style={{ textAlign: "center" }}>
-              <BlobButton type="button" blob="D" from="#56b0e3" to="#a78bfa" onClick={() => document.getElementById("avatar-upload")?.click()}>
+              <BlobButton type="button" blob="D" from="#ec4899" to="#0ea5e9" onClick={() => document.getElementById("avatar-upload")?.click()}>
                 {avatarUrl ? "Change photo" : "Upload photo"}
               </BlobButton>
             </p>
@@ -391,7 +391,7 @@ export default function Settings() {
           {bioError && <p style={{ textAlign: "center" }}><strong>{bioError}</strong></p>}
           {bioSuccess && <p style={{ textAlign: "center" }}>Bio updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="F" disabled={bioSubmitting} from="#d88cbb" to="#56b0e3">Save bio</BlobButton>
+            <BlobButton blob="F" disabled={bioSubmitting} from="#9333ea" to="#e879b0">Save bio</BlobButton>
           </p>
         </form>
       </div>
@@ -472,7 +472,7 @@ export default function Settings() {
           {categoryError && <p style={{ textAlign: "center" }}><strong>{categoryError}</strong></p>}
           {categorySuccess && <p style={{ textAlign: "center" }}>Categories updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="G" disabled={categorySubmitting} from="#56b0e3" to="#d88cbb">Save categories</BlobButton>
+            <BlobButton blob="G" disabled={categorySubmitting} from="#ffe100" to="#f78f1e">Save categories</BlobButton>
           </p>
         </form>
       </div>
@@ -502,7 +502,7 @@ export default function Settings() {
           {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
           {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="B" disabled={!canSubmit} from="#ee3666" to="#a78bfa">Update username</BlobButton>
+            <BlobButton blob="B" disabled={!canSubmit} from="#00cfff" to="#4338ca">Update username</BlobButton>
           </p>
         </form>
       </div>

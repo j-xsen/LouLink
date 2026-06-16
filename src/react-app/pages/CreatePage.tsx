@@ -383,7 +383,7 @@ export default function CreatePage() {
 
       <div style={{ marginTop: "2rem" }} id="social-links">
         <ShapeTitle>Socials</ShapeTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "1.25rem" }}>
           {(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"] as const).map((platform) => {
             const color = BRAND_COLORS[platform];
             return (
