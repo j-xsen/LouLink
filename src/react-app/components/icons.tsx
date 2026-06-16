@@ -55,6 +55,9 @@ export function Icon({ name, size = 16, color }: { name: string; size?: number; 
   return <Component size={size} style={color ? { color } : undefined} />;
 }
 
+const DROP_WIDTH = 320;
+const SCREEN_GAP = 8;
+
 export function IconPicker({
   value,
   onChange,
@@ -63,76 +66,174 @@ export function IconPicker({
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLSpanElement>(null);
+  const pointerDownOutside = useRef<{ x: number; y: number } | null>(null);
+
+  function openDropdown() {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      // Right-align with trigger, clamped to viewport
+      let left = rect.right - DROP_WIDTH;
+      left = Math.max(SCREEN_GAP, left);
+      left = Math.min(vw - DROP_WIDTH - SCREEN_GAP, left);
+      setDropPos({ top: rect.bottom + 4, left });
+    }
+    setOpen(true);
+  }
 
   useEffect(() => {
     if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+
+    function handlePointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        pointerDownOutside.current = { x: e.clientX, y: e.clientY };
+      } else {
+        pointerDownOutside.current = null;
+      }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    function handlePointerUp(e: PointerEvent) {
+      const start = pointerDownOutside.current;
+      pointerDownOutside.current = null;
+      if (!start) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      // Only close if the pointer barely moved (tap, not a scroll/drag)
+      if (Math.sqrt(dx * dx + dy * dy) < 10) setOpen(false);
+    }
+
+    let rafId: number | null = null;
+    function handleScroll() {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!ref.current) return;
+        const rect = ref.current.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) {
+          setOpen(false);
+          return;
+        }
+        const vw = window.innerWidth;
+        let left = rect.right - DROP_WIDTH;
+        left = Math.max(SCREEN_GAP, left);
+        left = Math.min(vw - DROP_WIDTH - SCREEN_GAP, left);
+        setDropPos({ top: rect.bottom + 4, left });
+      });
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("scroll", handleScroll, true);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+
+    };
   }, [open]);
 
   return (
     <span ref={ref} style={{ position: "relative", display: "inline-block" }}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+        onClick={() => (open ? setOpen(false) : openDropdown())}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          borderRadius: 20,
+          border: open ? "1.5px solid #f78f1e" : "1px solid #d1d5db",
+          background: "#fff",
+          padding: "0.35rem 0.75rem",
+          cursor: "pointer",
+          fontSize: "0.9rem",
+          color: "#12080b",
+          fontFamily: "inherit",
+          transition: "border-color 120ms ease",
+        }}
       >
-        {value ? <><Icon name={value} /> {value}</> : "— None —"}
-        {" ▾"}
+        {value ? (
+          <>
+            <Icon name={value} size={15} />
+            <span>{value}</span>
+          </>
+        ) : (
+          <span style={{ color: "#9ca3af" }}>None</span>
+        )}
+        <span style={{ color: "#9ca3af", fontSize: "0.7rem", marginLeft: 2 }}>▾</span>
       </button>
+
       {open && (
+        // position:fixed escapes overflow:hidden on body/html so it's never clipped
         <div
           style={{
-            position: "absolute",
-            zIndex: 10,
-            background: "white",
-            border: "1px solid #ccc",
-            padding: 8,
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 4,
-            width: 280,
+            position: "fixed",
+            top: dropPos.top,
+            left: dropPos.left,
+            zIndex: 200,
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 14,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
+            padding: "0.75rem",
+            width: DROP_WIDTH,
           }}
         >
-          {ICON_OPTIONS.map((name) => (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+            {ICON_OPTIONS.map((name) => {
+              const selected = value === name;
+              const isHovered = hovered === name;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  title={name}
+                  onClick={() => { onChange(name); setOpen(false); }}
+                  onMouseEnter={() => setHovered(name)}
+                  onMouseLeave={() => setHovered(null)}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 3,
+                    padding: "7px 4px",
+                    borderRadius: 8,
+                    border: selected ? "1.5px solid #f78f1e" : "1.5px solid transparent",
+                    background: selected || isHovered ? "#fef3e2" : "transparent",
+                    cursor: "pointer",
+                    color: selected ? "#f78f1e" : "#12080b",
+                    transition: "background 100ms ease, border-color 100ms ease",
+                  }}
+                >
+                  <Icon name={name} size={20} color={selected ? "#f78f1e" : undefined} />
+                  <span style={{ fontSize: "0.6rem", color: selected ? "#f78f1e" : "#9ca3af", lineHeight: 1.2, textAlign: "center" }}>{name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ borderTop: "1px solid #f3f4f6", marginTop: "0.5rem", paddingTop: "0.5rem" }}>
             <button
-              key={name}
               type="button"
-              title={name}
-              onClick={() => { onChange(name); setOpen(false); }}
+              onClick={() => { onChange(""); setOpen(false); }}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 2,
-                padding: "6px 4px",
-                fontSize: 10,
-                background: value === name ? "#eee" : "transparent",
-                border: value === name ? "1px solid #999" : "1px solid transparent",
+                width: "100%",
+                textAlign: "center",
+                padding: "0.35rem",
+                borderRadius: 8,
+                border: "1.5px solid transparent",
+                background: value === "" ? "#fef3e2" : "transparent",
                 cursor: "pointer",
+                color: "#9ca3af",
+                fontSize: "0.85rem",
+                fontFamily: "inherit",
               }}
             >
-              <Icon name={name} size={18} />
-              {name}
+              — None —
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => { onChange(""); setOpen(false); }}
-            style={{
-              gridColumn: "1 / -1",
-              textAlign: "center",
-              padding: "4px 6px",
-              background: value === "" ? "#eee" : "transparent",
-              border: value === "" ? "1px solid #999" : "1px solid transparent",
-            }}
-          >
-            — None —
-          </button>
+          </div>
         </div>
       )}
     </span>
