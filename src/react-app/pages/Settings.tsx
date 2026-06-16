@@ -299,6 +299,7 @@ export default function Settings() {
                   setAccentColor(key);
                   setHeaderColor(t.label);
                   if (idx !== -1) setCardColor(generateCardPalette(THEMES[key].bg)[idx]);
+                  setCardTextColor(null);
                 }}
                   style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                   <span style={{
@@ -329,6 +330,7 @@ export default function Settings() {
                       const idx = cardColor !== null ? generateCardPalette(bgForKey(accentColor)).indexOf(cardColor) : -1;
                       setAccentColor(newKey);
                       if (idx !== -1) setCardColor(generateCardPalette(bgForKey(newKey))[idx]);
+                      setCardTextColor(null);
                     }}
                     style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
                   />

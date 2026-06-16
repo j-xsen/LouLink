@@ -497,9 +497,13 @@ export default function ProfilePage() {
               title={THEME_NAMES[key]}
               onClick={() => {
                 const idx = pendingCardColor !== null ? generateCardPalette(theme.bg).indexOf(pendingCardColor) : -1;
+                const oldTextSwatches = [null, theme.text, theme.label, pendingHeader].filter((c, i, a) => a.indexOf(c) === i);
+                const textIdx = oldTextSwatches.indexOf(pendingCardText);
+                const newTextSwatches = [null, t.text, t.label, t.label].filter((c, i, a) => a.indexOf(c) === i);
                 setPendingKey(key);
                 setPendingHeader(t.label);
                 if (idx !== -1) setPendingCardColor(generateCardPalette(THEMES[key].bg)[idx]);
+                if (textIdx !== -1) setPendingCardText(newTextSwatches[Math.min(textIdx, newTextSwatches.length - 1)]);
                 setThemeSaved(false);
               }}
               style={{
@@ -526,8 +530,13 @@ export default function ProfilePage() {
               onChange={(e) => {
                 const newKey = e.target.value;
                 const idx = pendingCardColor !== null ? generateCardPalette(theme.bg).indexOf(pendingCardColor) : -1;
+                const oldTextSwatches = [null, theme.text, theme.label, pendingHeader].filter((c, i, a) => a.indexOf(c) === i);
+                const textIdx = oldTextSwatches.indexOf(pendingCardText);
+                const derivedText = autoTextColor(newKey);
+                const newTextSwatches = [null, derivedText, pendingHeader].filter((c, i, a) => a.indexOf(c) === i);
                 setPendingKey(newKey);
                 if (idx !== -1) setPendingCardColor(generateCardPalette(bgForKey(newKey))[idx]);
+                if (textIdx !== -1) setPendingCardText(newTextSwatches[Math.min(textIdx, newTextSwatches.length - 1)]);
                 setThemeSaved(false);
               }}
               style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
