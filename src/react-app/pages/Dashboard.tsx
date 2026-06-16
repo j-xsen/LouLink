@@ -79,8 +79,15 @@ export default function Dashboard() {
               overflow: "hidden",
             }}>
               <Link
-                to="/settings"
+                to="/analytics"
                 style={{ display: "block", padding: "0.65rem 1rem", textDecoration: "none", color: "inherit", fontSize: "0.9rem" }}
+                onClick={() => setMenuOpen(false)}
+              >
+                Analytics
+              </Link>
+              <Link
+                to="/settings"
+                style={{ display: "block", padding: "0.65rem 1rem", textDecoration: "none", color: "inherit", fontSize: "0.9rem", borderTop: "1px solid #f3f4f6" }}
                 onClick={() => setMenuOpen(false)}
               >
                 Settings

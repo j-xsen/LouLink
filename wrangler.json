@@ -21,6 +21,9 @@
 			"bucket_name": "loulink-avatars"
 		}
 	],
+	"triggers": {
+		"crons": ["0 6 * * *"]
+	},
 	"unsafe": {
 		"bindings": [
 			{

@@ -18,6 +18,26 @@ function getJwks(url: string) {
   return jwksCache.jwks;
 }
 
+// Like requireAuth but silently ignores missing/invalid tokens — used on
+// public endpoints where auth is optional (e.g. self-view/click prevention).
+export const optionalAuth = createMiddleware<AuthEnv>(async (c, next) => {
+  const header = c.req.header("Authorization");
+  if (header?.startsWith("Bearer ")) {
+    const token = header.slice("Bearer ".length).trim();
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(token, getJwks(c.env.AUTH_JWKS_URL), {
+          algorithms: ALLOWED_ALGORITHMS,
+        });
+        if (payload.sub) c.set("userId", payload.sub);
+      } catch {
+        // Ignore — anonymous visitor
+      }
+    }
+  }
+  await next();
+});
+
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const header = c.req.header("Authorization");
   if (!header?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);

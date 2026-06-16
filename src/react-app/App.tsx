@@ -8,6 +8,7 @@ import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import ProfilePage from "./pages/ProfilePage";
+import Analytics from "./pages/Analytics";
 
 // ---------------------------------------------------------------------------
 // ScrollToTop
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/signup" element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>} />
           <Route path="/create" element={<CreatePage />} />
           <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
+          <Route path="/analytics" element={<RequireProfile><Analytics /></RequireProfile>} />
           <Route path="/:username" element={<ProfilePage />} />
         </Routes>
       </AuthProvider>

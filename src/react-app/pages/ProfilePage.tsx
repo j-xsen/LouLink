@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { Settings } from "lucide-react";
+import { Settings, BarChart2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -14,7 +14,7 @@ import { AVATAR_BLOB_SHAPES } from "../components/ui";
 import { useAuth } from "../auth";
 
 type PublicItem =
-  | { kind: "link"; title: string; url: string; icon?: string }
+  | { kind: "link"; id?: string; title: string; url: string; icon?: string }
   | { kind: "header"; title: string };
 type PublicProfile = {
   username: string;
@@ -66,7 +66,7 @@ export default function ProfilePage() {
   const [items, setItems] = useState<PublicItem[]>(() =>
     cachedProfile ? (cachedProfile.links ?? []).map((l: any) => l.kind === "header"
       ? { kind: "header" as const, title: l.title }
-      : { kind: "link" as const, title: l.title, url: l.url, icon: l.icon ?? undefined }
+      : { kind: "link" as const, id: l.id, title: l.title, url: l.url, icon: l.icon ?? undefined }
     ) : []
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
@@ -98,7 +98,7 @@ export default function ProfilePage() {
         setProfile(d.profile);
         setItems((d.links ?? []).map((l: any) => l.kind === "header"
           ? { kind: "header", title: l.title }
-          : { kind: "link", title: l.title, url: l.url, icon: l.icon ?? undefined }
+          : { kind: "link", id: l.id, title: l.title, url: l.url, icon: l.icon ?? undefined }
         ));
         setStatus("found");
         if (!themeInitialized.current) {
@@ -147,6 +147,37 @@ export default function ProfilePage() {
   }, [items]);
 
   const isOwner = !!authProfile && authProfile.username === username;
+
+  // ---- Analytics tracking ----
+  const eventIdRef = useRef<string | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (status !== "found" || !profile || isOwner) return;
+    const body = JSON.stringify({ username: profile.username, referrer: document.referrer || null });
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.token) headers["Authorization"] = `Bearer ${session.token}`;
+    fetch("/api/track/view", { method: "POST", headers, body })
+      .then((r) => r.json())
+      .then((d: { ok: boolean; eventId?: string }) => {
+        if (d.ok && d.eventId) {
+          eventIdRef.current = d.eventId;
+          startTimeRef.current = Date.now();
+        }
+      })
+      .catch(() => {});
+    return () => {
+      const eventId = eventIdRef.current;
+      const start = startTimeRef.current;
+      if (!eventId || !start) return;
+      const durationMs = Date.now() - start;
+      if (durationMs < 500) return;
+      navigator.sendBeacon(
+        "/api/track/duration",
+        new Blob([JSON.stringify({ eventId, durationMs })], { type: "application/json" }),
+      );
+    };
+  }, [status, profile?.username, isOwner]);
   const theme = resolveTheme(pendingKey, items);
   const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape } = parseAccentColor(profile?.accent_color ?? null);
   const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape;
@@ -178,6 +209,17 @@ export default function ProfilePage() {
       deleteCached(cacheKey);
       setThemeSaved(true);
       setTimeout(() => setThemeSaved(false), 2000);
+    }
+  }
+
+  function handleLinkClick(linkId: string | undefined) {
+    if (isOwner || !linkId) return;
+    const body = JSON.stringify({ linkId, referrer: document.referrer || null });
+    const blob = new Blob([body], { type: "application/json" });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon("/api/track/click", blob);
+    } else {
+      fetch("/api/track/click", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
     }
   }
 
@@ -303,6 +345,7 @@ export default function ProfilePage() {
                 rel="noopener noreferrer"
                 className="link-card"
                 style={{ background: theme.card, color: theme.text, borderColor: `${theme.label}28` }}
+                onClick={() => handleLinkClick(item.id)}
               >
                 {ogImage && (
                   <img
@@ -352,23 +395,40 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      {/* Owner theme toolbar — collapsed bookmark tab */}
+      {/* Owner bookmark tabs — analytics + theme palette */}
       {isOwner && !paletteOpen && (
-        <button
-          type="button"
-          title="Open theme palette"
-          onClick={() => setPaletteOpen(true)}
-          style={{
-            position: "fixed", bottom: 0, right: 0,
-            width: 44, height: 36,
-            background: `${theme.card}f0`, backdropFilter: "blur(12px)",
-            border: `1px solid ${theme.label}30`, borderBottom: "none",
-            borderRadius: "8px 8px 0 0",
-            color: theme.text, fontSize: "0.85rem",
-            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 100, boxShadow: "0 -2px 8px #0002",
-          }}
-        ><Settings size={16} /></button>
+        <>
+          <Link
+            to="/analytics"
+            title="View analytics"
+            style={{
+              position: "fixed", bottom: 0, right: 48,
+              width: 44, height: 36,
+              background: `${theme.card}f0`, backdropFilter: "blur(12px)",
+              border: `1px solid ${theme.label}30`, borderBottom: "none",
+              borderRadius: "8px 8px 0 0",
+              color: theme.text,
+              textDecoration: "none",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 100, boxShadow: "0 -2px 8px #0002",
+            }}
+          ><BarChart2 size={16} /></Link>
+          <button
+            type="button"
+            title="Open theme palette"
+            onClick={() => setPaletteOpen(true)}
+            style={{
+              position: "fixed", bottom: 0, right: 0,
+              width: 44, height: 36,
+              background: `${theme.card}f0`, backdropFilter: "blur(12px)",
+              border: `1px solid ${theme.label}30`, borderBottom: "none",
+              borderRadius: "8px 8px 0 0",
+              color: theme.text, fontSize: "0.85rem",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 100, boxShadow: "0 -2px 8px #0002",
+            }}
+          ><Settings size={16} /></button>
+        </>
       )}
 
       {/* Owner theme toolbar */}
