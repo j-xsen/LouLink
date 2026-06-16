@@ -249,6 +249,7 @@ app.put("/api/me/accent", requireAuth, async (c) => {
     RETURNING username, accent_color
   `;
   if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
   return c.json({ profile });
 });
 
