@@ -39,7 +39,11 @@ export default function Home() {
           style={{ width: "min(55%, 220px)", height: "auto" }}
         /></Link>
       </div>
-      <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem" }}>
+      <p style={{ textAlign: "center", margin: "1.25rem 0 0", opacity: 0.75, fontSize: "0.95rem" }}>
+        A free resource for Louisville artists and businesses to compile their
+        internet presences in a public repertoire of their peers.
+      </p>
+      <div style={{ display: "flex", gap: "0.25rem", marginTop: "1.25rem", marginBottom: "0.75rem" }}>
         {session ? (
           <ShapeButton to="/signup" shape={shape1} style={{ flex: 1 }}>Complete profile</ShapeButton>
         ) : (

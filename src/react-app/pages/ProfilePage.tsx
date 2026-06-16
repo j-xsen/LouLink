@@ -524,7 +524,7 @@ export default function ProfilePage() {
               style={{ width: 16, height: 16, cursor: "pointer", accentColor: theme.label }}
             />
             <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.text, opacity: 0.5 }}>
-              Social colors
+              Socials colors
             </span>
           </label>
 

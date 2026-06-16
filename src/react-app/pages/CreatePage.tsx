@@ -382,7 +382,7 @@ export default function CreatePage() {
       </div>
 
       <div style={{ marginTop: "2rem" }} id="social-links">
-        <ShapeTitle>Social Links</ShapeTitle>
+        <ShapeTitle>Socials</ShapeTitle>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {(["YouTube", "Instagram", "Facebook", "Twitter", "Twitch", "Spotify", "Bandcamp", "SoundCloud"] as const).map((platform) => {
             const color = BRAND_COLORS[platform];
@@ -456,7 +456,7 @@ export default function CreatePage() {
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.13)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
             {[
               { label: "Links", id: "link-list" },
-              { label: "Social links", id: "social-links" },
+              { label: "Socials", id: "social-links" },
             ].map(({ label, id }) => (
               <button
                 key={id}
