@@ -247,7 +247,7 @@ export default function CreatePage() {
                   >
                     <DragHandle size={18} />
                   </div>
-                  <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.1rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title || "Untitled"}</span>
+                  <span style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.35rem", color: "#12080b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title || "Untitled"}</span>
                   <button type="button" onClick={() => removeItem(i)} style={{ ...ghostBtn, fontSize: "1.1rem", padding: "0 0.25rem" }}>×</button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
