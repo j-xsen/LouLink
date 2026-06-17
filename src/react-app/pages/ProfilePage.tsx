@@ -78,7 +78,7 @@ export default function ProfilePage() {
     ) : []
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
-  const [ogImages, setOgImages] = useState<Record<string, string>>({});
+  const [ogImages, setOgImages] = useState<Record<string, string | null>>({});
 
   // Pending theme key for owner preview before saving
   const themeInitialized = useRef(false);
@@ -145,20 +145,16 @@ export default function ProfilePage() {
       .filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link")
       .map((it) => it.url);
     if (linkUrls.length === 0) return;
-    Promise.all(
-      linkUrls.map((url) =>
-        fetch(`/api/og?url=${encodeURIComponent(url)}`)
-          .then((r) => r.ok ? r.json() : null)
-          .then((d: { ogImage: string | null } | null) => ({ url, ogImage: d?.ogImage ?? null }))
-          .catch(() => ({ url, ogImage: null }))
-      )
-    ).then((results) => {
-      const map: Record<string, string> = {};
-      for (const { url, ogImage } of results) {
-        if (ogImage) map[url] = ogImage;
-      }
-      setOgImages(map);
-    });
+    for (const url of linkUrls) {
+      fetch(`/api/og?url=${encodeURIComponent(url)}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((d: { ogImage: string | null } | null) => {
+          setOgImages((prev) => ({ ...prev, [url]: d?.ogImage ?? null }));
+        })
+        .catch(() => {
+          setOgImages((prev) => ({ ...prev, [url]: null }));
+        });
+    }
   }, [items]);
 
   const isOwner = !!authProfile && authProfile.username === username;
@@ -350,8 +346,9 @@ export default function ProfilePage() {
               );
             }
             const iconColor = item.icon ? BRAND_COLORS[item.icon] : undefined;
-            const ogImage = ogImages[item.url];
-            const faviconUrl = !ogImage ? getFaviconUrl(item.url) : "";
+            const ogStatus = ogImages[item.url];
+            const isOgLoading = !(item.url in ogImages);
+            const faviconUrl = !ogStatus && !isOgLoading ? getFaviconUrl(item.url) : "";
             return (
               <a
                 key={i}
@@ -362,20 +359,27 @@ export default function ProfilePage() {
                 style={{ background: theme.card, color: theme.cardText, borderColor: `${theme.label}28` }}
                 onClick={() => handleLinkClick(item.id)}
               >
-                {ogImage && (
-                  <img
-                    src={ogImage}
-                    alt=""
-                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                {(isOgLoading || ogStatus) && (
+                  <div
                     style={{
-                      alignSelf: "stretch",
-                      marginLeft: "calc(-1rem + 0.65rem)",
                       width: 110,
+                      height: 72,
+                      alignSelf: "stretch",
                       flexShrink: 0,
+                      marginLeft: "calc(-1rem + 0.65rem)",
                       borderRadius: "10px",
-                      objectFit: "cover",
+                      overflow: "hidden",
                     }}
-                  />
+                  >
+                    {ogStatus && (
+                      <img
+                        src={ogStatus}
+                        alt=""
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      />
+                    )}
+                  </div>
                 )}
                 {item.icon && <Icon name={item.icon} size={20} color={iconColor} />}
                 <span style={{ flex: 1 }}>{item.title}</span>
