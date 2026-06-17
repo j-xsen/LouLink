@@ -505,15 +505,6 @@ app.get("/api/og", async (c) => {
 // Admin API — requires ADMIN_KEY secret in Authorization: Bearer header
 // ---------------------------------------------------------------------------
 
-app.get("/api/admin/debug", async (c) => {
-  const key = c.env.ADMIN_KEY;
-  return c.json({
-    has_key: !!key,
-    length: key?.length ?? 0,
-    preview: key ? `${key.slice(0, 2)}…${key.slice(-2)}` : null,
-  });
-});
-
 const VALID_CATEGORIES = new Set(["music", "visual-art", "food", "retail", "community"]);
 
 app.get("/api/admin/users", requireAdmin, async (c) => {
