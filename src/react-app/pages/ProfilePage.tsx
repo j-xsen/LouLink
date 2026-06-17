@@ -67,7 +67,7 @@ function bgForKey(key: string | null): string {
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
-  const { session, profile: authProfile } = useAuth();
+  const { loading: authLoading, session, profile: authProfile } = useAuth();
   const cacheKey = `/api/profile/${username}`;
   const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey);
   const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
@@ -164,7 +164,7 @@ export default function ProfilePage() {
   const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (status !== "found" || !profile || isOwner) return;
+    if (authLoading || status !== "found" || !profile || isOwner) return;
     const body = JSON.stringify({ username: profile.username, referrer: document.referrer || null });
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (session?.token) headers["Authorization"] = `Bearer ${session.token}`;
@@ -188,7 +188,7 @@ export default function ProfilePage() {
         new Blob([JSON.stringify({ eventId, durationMs })], { type: "application/json" }),
       );
     };
-  }, [status, profile?.username, isOwner]);
+  }, [authLoading, status, profile?.username, isOwner]);
   const theme = resolveTheme({ themeKey: pendingKey, headerColor: pendingHeader, monoSocial: pendingMono, avatarShape: pendingShape, cardColor: pendingCardColor, cardTextColor: pendingCardText }, items);
   const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape, cardColor: savedCardColor, cardTextColor: savedCardTextColor } = parseAccentColor(profile?.accent_color ?? null);
   const isDirty = pendingKey !== savedKey || pendingHeader !== savedHeader || pendingMono !== savedMono || pendingShape !== savedShape || pendingCardColor !== savedCardColor || pendingCardText !== savedCardTextColor;

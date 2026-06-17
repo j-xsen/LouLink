@@ -44,6 +44,11 @@ export default function CreatePage() {
       })
       .catch(() => {});
   }, [profile?.username]);
+  const hasChanges = profile != null && (
+    JSON.stringify(items) !== JSON.stringify(savedItems) ||
+    JSON.stringify(socialLinks) !== JSON.stringify(savedSocialLinks)
+  );
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [username, setUsername] = useState("");
@@ -474,6 +479,34 @@ export default function CreatePage() {
           <p style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#9ca3af" }}>
             Already have an account? <Link to="/signin">Sign in</Link>
           </p>
+        </div>
+      )}
+
+      {/* Floating save button — bottom-left, only when there are unsaved changes */}
+      {session && hasChanges && (
+        <div style={{ position: "fixed", bottom: "1.5rem", left: "1.25rem", zIndex: 900 }}>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              background: "#f78f1e",
+              color: "#fff",
+              border: "none",
+              borderRadius: 100,
+              padding: "0.6rem 1.4rem",
+              fontWeight: 700,
+              fontSize: "0.95rem",
+              cursor: saving ? "default" : "pointer",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+              opacity: saving ? 0.7 : 1,
+              transition: "opacity 150ms ease",
+              letterSpacing: "0.03em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {saving ? "Saving…" : "Save page →"}
+          </button>
         </div>
       )}
 
