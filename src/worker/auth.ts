@@ -38,6 +38,14 @@ export const optionalAuth = createMiddleware<AuthEnv>(async (c, next) => {
   await next();
 });
 
+export const requireAdmin = createMiddleware<AuthEnv>(async (c, next) => {
+  const header = c.req.header("Authorization");
+  if (!header?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
+  const token = header.slice("Bearer ".length).trim();
+  if (!token || !c.env.ADMIN_KEY || token !== c.env.ADMIN_KEY) return c.json({ error: "Unauthorized" }, 401);
+  await next();
+});
+
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
   const header = c.req.header("Authorization");
   if (!header?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);

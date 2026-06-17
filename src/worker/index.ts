@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { requireAuth, optionalAuth } from "./auth";
+import { requireAuth, optionalAuth, requireAdmin } from "./auth";
 import { createDb } from "./db";
 import { isBot, parseUserAgent, classifyReferrer, mergeJsonbCounts } from "./analytics";
 import { handleScheduled } from "./cron";
@@ -131,35 +131,33 @@ app.post("/api/onboarding", requireAuth, async (c) => {
   }
 
   const sql = createDb(c.env.DATABASE_URL);
-  const [existing] = await sql`SELECT user_id FROM public.profiles WHERE user_id = ${userId}`;
-  if (existing) return c.json({ error: "Profile already exists" }, 409);
+
+  const linkQueries = items.map((item, i) =>
+    item.kind === "header"
+      ? sql`INSERT INTO public.links (user_id, kind, title, url, sort_order)
+            VALUES (${userId}, 'header', ${item.title}, NULL, ${i})`
+      : sql`INSERT INTO public.links (user_id, kind, title, url, icon, sort_order)
+            VALUES (${userId}, 'link', ${item.title}, ${item.url}, ${item.icon ?? null}, ${i})`
+  );
 
   try {
-    const [profile] = await sql`
-      INSERT INTO public.profiles (user_id, username, display_name)
-      VALUES (${userId}, ${username}, ${display_name})
-      RETURNING username, display_name
-    `;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.kind === "header") {
-        await sql`
-          INSERT INTO public.links (user_id, kind, title, url, sort_order)
-          VALUES (${userId}, 'header', ${item.title}, NULL, ${i})
-        `;
-      } else {
-        await sql`
-          INSERT INTO public.links (user_id, kind, title, url, icon, sort_order)
-          VALUES (${userId}, 'link', ${item.title}, ${item.url}, ${item.icon ?? null}, ${i})
-        `;
-      }
-    }
-
+    const [profileRows] = await sql.transaction([
+      sql`INSERT INTO public.profiles (user_id, username, display_name)
+          VALUES (${userId}, ${username}, ${display_name})
+          RETURNING username, display_name`,
+      ...linkQueries,
+    ]);
+    const profile = profileRows[0] as { username: string; display_name: string };
     return c.json({ profile });
   } catch (e) {
-    if ((e as { code?: string }).code === "23505") {
-      return c.json({ error: "Username taken" }, 409);
+    const code = (e as { code?: string }).code;
+    if (code === "23505") {
+      // unique_violation: could be user_id PK (profile exists) or username unique index
+      const detail = (e as { detail?: string }).detail ?? "";
+      return c.json(
+        { error: detail.includes("username") ? "Username taken" : "Profile already exists" },
+        409,
+      );
     }
     throw e;
   }
@@ -502,6 +500,108 @@ app.get("/api/og", async (c) => {
   c.header("Cache-Control", "public, max-age=3600");
   return c.json({ ogImage });
 });
+
+// ---------------------------------------------------------------------------
+// Admin API — requires ADMIN_KEY secret in Authorization: Bearer header
+// ---------------------------------------------------------------------------
+
+app.get("/api/admin/debug", async (c) => {
+  const key = c.env.ADMIN_KEY;
+  return c.json({
+    has_key: !!key,
+    length: key?.length ?? 0,
+    preview: key ? `${key.slice(0, 2)}…${key.slice(-2)}` : null,
+  });
+});
+
+const VALID_CATEGORIES = new Set(["music", "visual-art", "food", "retail", "community"]);
+
+app.get("/api/admin/users", requireAdmin, async (c) => {
+  const sql = createDb(c.env.DATABASE_URL);
+  const rows = await sql`
+    SELECT
+      user_id AS id,
+      username,
+      display_name,
+      verified,
+      categories,
+      hide_from_directory,
+      created_at
+    FROM public.profiles
+    ORDER BY created_at DESC
+  `;
+  return c.json({ users: rows });
+});
+
+app.patch("/api/admin/profiles/:username", requireAdmin, async (c) => {
+  const username = c.req.param("username").toLowerCase().trim();
+  const body = await readJson<{ verified?: unknown; categories?: unknown }>(c);
+  if (!body) return c.json({ error: "Invalid request body" }, 400);
+
+  const updates: Record<string, unknown> = {};
+
+  if ("verified" in body) {
+    if (typeof body.verified !== "boolean") return c.json({ error: "verified must be a boolean" }, 400);
+    updates.verified = body.verified;
+  }
+
+  if ("categories" in body) {
+    if (!Array.isArray(body.categories)) return c.json({ error: "categories must be an array" }, 400);
+    const cats = body.categories as unknown[];
+    if (!cats.every((c) => typeof c === "string" && VALID_CATEGORIES.has(c))) {
+      return c.json({ error: `Invalid category. Allowed: ${[...VALID_CATEGORIES].join(", ")}` }, 400);
+    }
+    updates.categories = cats;
+  }
+
+  if (Object.keys(updates).length === 0) return c.json({ error: "No fields to update" }, 400);
+
+  const sql = createDb(c.env.DATABASE_URL);
+
+  let profile: Record<string, unknown> | undefined;
+  if ("verified" in updates && "categories" in updates) {
+    const [row] = await sql`
+      UPDATE public.profiles
+      SET verified = ${updates.verified as boolean}, categories = ${updates.categories as string[]}, updated_at = now()
+      WHERE username = ${username}
+      RETURNING username, display_name, verified, categories
+    `;
+    profile = row as Record<string, unknown> | undefined;
+  } else if ("verified" in updates) {
+    const [row] = await sql`
+      UPDATE public.profiles
+      SET verified = ${updates.verified as boolean}, updated_at = now()
+      WHERE username = ${username}
+      RETURNING username, display_name, verified, categories
+    `;
+    profile = row as Record<string, unknown> | undefined;
+  } else {
+    const [row] = await sql`
+      UPDATE public.profiles
+      SET categories = ${updates.categories as string[]}, updated_at = now()
+      WHERE username = ${username}
+      RETURNING username, display_name, verified, categories
+    `;
+    profile = row as Record<string, unknown> | undefined;
+  }
+
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, username);
+  return c.json({ profile });
+});
+
+app.delete("/api/admin/profiles/:username", requireAdmin, async (c) => {
+  const username = c.req.param("username").toLowerCase().trim();
+  const sql = createDb(c.env.DATABASE_URL);
+  const [deleted] = await sql`
+    DELETE FROM public.profiles WHERE username = ${username} RETURNING username, user_id
+  `;
+  if (!deleted) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, username);
+  return c.json({ deleted: { username: deleted.username, user_id: deleted.user_id } });
+});
+
+// ---------------------------------------------------------------------------
 
 app.get("/api/directory", async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";

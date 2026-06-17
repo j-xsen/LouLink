@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import ProfilePage from "./pages/ProfilePage";
 import Analytics from "./pages/Analytics";
+import AdminDashboard from "./pages/AdminDashboard";
 
 // ---------------------------------------------------------------------------
 // ScrollToTop
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/create" element={<CreatePage />} />
           <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
           <Route path="/analytics" element={<RequireProfile><Analytics /></RequireProfile>} />
+          <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/:username" element={<ProfilePage />} />
         </Routes>
       </AuthProvider>

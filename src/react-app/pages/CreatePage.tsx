@@ -17,10 +17,12 @@ export default function CreatePage() {
   const navigate = useNavigate();
   const { session, profile, loadSession } = useAuth();
   useSeo({ title: profile ? "Edit Links | LouLink" : "Build Your Page | LouLink", noindex: true });
-  // New users seed from localStorage draft; existing users load from the server below
-  const [items, setItems] = useState<DraftItem[]>(() => getDraft().items ?? []);
+  // New users (no profile) seed from localStorage draft; existing users load from the server below
+  const [items, setItems] = useState<DraftItem[]>(() => profile ? [] : (getDraft().items ?? []));
 
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>(profile?.social_links ?? {});
+  const [savedItems, setSavedItems] = useState<DraftItem[]>([]);
+  const [savedSocialLinks, setSavedSocialLinks] = useState<Record<string, string>>({});
 
   // Existing users: fetch their current links from the server and use those
   useEffect(() => {
@@ -34,8 +36,11 @@ export default function CreatePage() {
             ? { kind: "header" as const, title: l.title }
             : { kind: "link" as const, title: l.title, url: l.url ?? "", icon: l.icon ?? undefined }
         );
+        const socials = d.profile?.social_links ?? {};
         setItems(loaded);
-        if (d.profile?.social_links) setSocialLinks(d.profile.social_links);
+        setSavedItems(loaded);
+        setSocialLinks(socials);
+        setSavedSocialLinks(socials);
       })
       .catch(() => {});
   }, [profile?.username]);
@@ -90,8 +95,17 @@ export default function CreatePage() {
     }
     clearDraft();
     deleteCached(`/api/profile/${profile.username}`);
+    setSavedItems(items);
+    setSavedSocialLinks(socialLinks);
     navigate("/");
   }
+
+  function handleCancel() {
+    setItems(savedItems);
+    setSocialLinks(savedSocialLinks);
+    navigate("/");
+  }
+
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkIcon, setLinkIcon] = useState<string>("");
@@ -192,7 +206,7 @@ export default function CreatePage() {
 
   function updateItems(next: DraftItem[]) {
     setItems(next);
-    saveDraft({ items: next });
+    if (!profile) saveDraft({ items: next });
   }
 
   function addLink() {
@@ -240,7 +254,7 @@ export default function CreatePage() {
     setItems(prev => {
       const next = [...prev];
       next.splice(to, 0, next.splice(from, 1)[0]);
-      saveDraft({ items: next });
+      if (!profile) saveDraft({ items: next });
       return next;
     });
   }
@@ -427,7 +441,19 @@ export default function CreatePage() {
             </div>
           )}
           {saveError && <p style={{ textAlign: "center", color: "#dc2626", fontWeight: 700 }}>{saveError}</p>}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginTop: "1rem" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              {profile && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={saving}
+                  style={{ borderRadius: 100, border: "2px solid #12080b", background: "transparent", color: "#12080b", padding: "0.45rem 1.4rem", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", letterSpacing: "0.03em" }}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
             <BlobButton
               type="button"
               onClick={handleSave}
@@ -435,12 +461,13 @@ export default function CreatePage() {
             >
               {saving ? "Saving…" : "Save page →"}
             </BlobButton>
+            <div />
           </div>
         </div>
       ) : (
         <div style={{ marginTop: "2rem", textAlign: "center" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <BlobButton type="button" onClick={() => navigate("/signup")}>
+            <BlobButton type="button" onClick={() => navigate("/signup", { state: { draftItems: items } })}>
               Create account to save →
             </BlobButton>
           </div>

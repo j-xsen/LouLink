@@ -5,6 +5,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { authClient, getJwt } from "./auth-client";
+import { clearDraft } from "./lib/draft";
 import type { SessionData, ProfileData } from "./types";
 
 type AuthContextType = {
@@ -68,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await authClient.signOut();
+    clearDraft();
     setSession(null);
     setProfile(null);
   }, []);

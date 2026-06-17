@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { Settings, BarChart2 } from "lucide-react";
+import { Settings, BarChart2, Pencil } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -417,6 +417,21 @@ export default function ProfilePage() {
       {/* Owner bookmark tabs — analytics + theme palette */}
       {isOwner && !paletteOpen && (
         <>
+          <Link
+            to="/create"
+            title="Edit links"
+            style={{
+              position: "fixed", bottom: 0, right: 96,
+              width: 44, height: 36,
+              background: `${theme.card}f0`, backdropFilter: "blur(12px)",
+              border: `1px solid ${theme.label}30`, borderBottom: "none",
+              borderRadius: "8px 8px 0 0",
+              color: theme.text,
+              textDecoration: "none",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 100, boxShadow: "0 -2px 8px #0002",
+            }}
+          ><Pencil size={16} /></Link>
           <Link
             to="/analytics"
             title="View analytics"

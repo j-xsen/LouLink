@@ -3,16 +3,19 @@
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { authClient, getJwt } from "../auth-client";
 import { useAuth } from "../auth";
-import { getDraft, clearDraft } from "../lib/draft";
+import { clearDraft } from "../lib/draft";
+import type { DraftItem } from "../types";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 
 export default function SignUp() {
   const { session, loadSession } = useAuth();
+  const location = useLocation();
+  const draftItems: DraftItem[] = (location.state as { draftItems?: DraftItem[] } | null)?.draftItems ?? [];
   const navigate = useNavigate();
   useSeo({ title: "Sign Up | LouLink", noindex: true });
   const [displayName, setDisplayName] = useState(session?.name ?? "");
@@ -54,9 +57,26 @@ export default function SignUp() {
         password,
       });
       if (signUpError) {
-        setError(signUpError.message ?? "Sign up failed.");
-        setSubmitting(false);
-        return;
+        // If the auth account already exists, the user may have a partial signup
+        // (auth record created, but onboarding never completed). Try signing in
+        // with the provided credentials so they can finish setup.
+        const isExistingAccount =
+          signUpError.status === 422 ||
+          signUpError.message?.toLowerCase().includes("already exists") ||
+          signUpError.message?.toLowerCase().includes("user already exists");
+        if (isExistingAccount) {
+          const { error: signInError } = await authClient.signIn.email({ email, password });
+          if (signInError) {
+            setError("An account with this email already exists. Try signing in.");
+            setSubmitting(false);
+            return;
+          }
+          // Session now established — fall through to onboarding
+        } else {
+          setError(signUpError.message ?? "Sign up failed.");
+          setSubmitting(false);
+          return;
+        }
       }
 
       const { data } = await authClient.getSession();
@@ -74,14 +94,15 @@ export default function SignUp() {
       }
     }
 
-    const draft = getDraft();
+    // Use items passed via router state from /create — never read localStorage here,
+    // since stale drafts from other users can persist across sessions.
     const res = await fetch("/api/onboarding", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
       body: JSON.stringify({
         username,
         display_name: displayName.trim(),
-        links: draft.items ?? [],
+        links: draftItems,
       }),
     });
     const d = await res.json();

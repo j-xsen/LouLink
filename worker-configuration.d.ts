@@ -10,6 +10,7 @@ interface __BaseEnv_Env {
 	CONTENTFUL_SPACE_ID: string;
 	CONTENTFUL_DELIVERY_TOKEN: string;
 	CONTENTFUL_MANAGEMENT_TOKEN: string;
+	ADMIN_KEY: string;
 	OG_RATE_LIMITER: RateLimit;
 	UNAUTHED_RATE_LIMITER: RateLimit;
 }
