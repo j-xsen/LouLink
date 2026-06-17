@@ -954,6 +954,12 @@ const WORKER_CATEGORY_LABELS: Record<string, string> = {
   nonprofit: "Nonprofit", organization: "Organization", collective: "Collective",
 };
 
+const BUSINESS_CATEGORIES = new Set([
+  "retail", "thrift", "restaurant", "coffee-shop", "bar", "services",
+  "news-outlet", "podcast", "music-venue", "gallery", "event-space",
+  "nonprofit", "organization", "collective",
+]);
+
 app.get("/:username", async (c) => {
   const username = c.req.param("username").toLowerCase();
   const assetResp = await c.env.ASSETS.fetch(c.req.raw);
@@ -962,7 +968,7 @@ app.get("/:username", async (c) => {
 
   const sql = createDb(c.env.DATABASE_URL);
   const [profile] = await sql`
-    SELECT display_name, bio, categories FROM public.profiles WHERE username = ${username}
+    SELECT display_name, bio, categories, avatar_asset_id FROM public.profiles WHERE username = ${username}
   `;
   if (!profile) return mutableAsset();
 
@@ -971,21 +977,49 @@ app.get("/:username", async (c) => {
   const categoryLabels = rawCategories
     .map((c) => WORKER_CATEGORY_LABELS[c])
     .filter((l): l is string => Boolean(l));
-  const title = `${displayName} | LouLink`;
   const url = `https://loul.ink/${username}`;
 
-  // Build category-first description for SEO: "Musician & Photographer in Louisville — Name. Bio…"
+  // User-first title — LouLink branding comes from og:site_name, not the title
+  const cats = categoryLabels.slice(0, 2).join(" & ");
+  const title = cats
+    ? `${displayName} — Louisville ${cats}`
+    : `${displayName} — Louisville`;
+
+  // Description: category + city context first, then bio
   let description: string;
   if (categoryLabels.length > 0) {
-    const cats = categoryLabels.slice(0, 2).join(" & ");
     const bioText = (profile.bio as string | null)?.trim() ?? "";
     description = bioText
       ? `${cats} in Louisville — ${displayName}. ${bioText}`
-      : `${cats} in Louisville — ${displayName}. Discover their links on LouLink.`;
+      : `${cats} in Louisville — ${displayName}. Find all their links in one place.`;
   } else {
-    description = (profile.bio as string | null)?.trim() || `Explore ${displayName}'s links on LouLink`;
+    description = (profile.bio as string | null)?.trim() || `Explore ${displayName}'s links — a Louisville creator on LouLink.`;
   }
   if (description.length > 155) description = description.slice(0, 152) + "…";
+
+  // Use avatar when available; fall back to branded OG image
+  const assetId = profile.avatar_asset_id as string | null;
+  const ogImage = assetId ? `https://loul.ink/avatars/${assetId}` : "https://loul.ink/og-image.jpg";
+  const twitterCard = assetId ? "summary" : "summary_large_image";
+
+  // JSON-LD structured data — Person or LocalBusiness based on categories
+  const isBusiness = rawCategories.some((cat) => BUSINESS_CATEGORIES.has(cat));
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": isBusiness ? "LocalBusiness" : "Person",
+    "name": displayName,
+    "url": url,
+    "description": description,
+    ...(assetId ? { "image": ogImage } : {}),
+    ...(categoryLabels.length > 0 ? { "keywords": categoryLabels.join(", ") } : {}),
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Louisville",
+      "addressRegion": "KY",
+      "addressCountry": "US",
+    },
+    "sameAs": url,
+  };
 
   const injected = [
     `<title>${escHtml(title)}</title>`,
@@ -995,12 +1029,14 @@ app.get("/:username", async (c) => {
     `<meta property="og:description" content="${escHtml(description)}">`,
     `<meta property="og:url" content="${escHtml(url)}">`,
     `<meta property="og:type" content="profile">`,
-    `<meta property="og:image" content="https://loul.ink/og-image.jpg">`,
-    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta property="profile:username" content="${escHtml(username)}">`,
+    `<meta property="og:image" content="${escHtml(ogImage)}">`,
+    `<meta name="twitter:card" content="${twitterCard}">`,
     `<meta name="twitter:title" content="${escHtml(title)}">`,
     `<meta name="twitter:description" content="${escHtml(description)}">`,
-    `<meta name="twitter:image" content="https://loul.ink/og-image.jpg">`,
+    `<meta name="twitter:image" content="${escHtml(ogImage)}">`,
     `<link rel="canonical" href="${escHtml(url)}">`,
+    `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
   ].join("\n\t\t");
 
   return new HTMLRewriter()

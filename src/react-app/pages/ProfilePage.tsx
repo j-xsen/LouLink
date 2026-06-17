@@ -94,9 +94,59 @@ export default function ProfilePage() {
   const [themeSaved, setThemeSaved] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  const seoTitle = profile
+    ? (profile.categories.length > 0
+        ? `${profile.display_name} — Louisville ${profile.categories.slice(0, 2).map((c) => CATEGORY_LABELS[c] ?? c).join(" & ")}`
+        : `${profile.display_name} — Louisville`)
+    : "LouLink | Louisville Link Repertoire";
+  const seoDescription = profile
+    ? (() => {
+        const cats = profile.categories.slice(0, 2).map((c) => CATEGORY_LABELS[c] ?? c).join(" & ");
+        const bio = profile.bio?.trim() ?? "";
+        if (cats && bio) return `${cats} in Louisville — ${profile.display_name}. ${bio}`.slice(0, 155);
+        if (cats) return `${cats} in Louisville — ${profile.display_name}. Find all their links in one place.`;
+        return bio || `Explore ${profile.display_name}'s links — a Louisville creator on LouLink.`;
+      })()
+    : undefined;
+
   useSeo({
-    title: profile ? `${profile.display_name} | LouLink` : "LouLink | Louisville Link Repertoire",
+    title: seoTitle,
+    description: seoDescription,
+    image: profile?.avatarUrl ?? undefined,
+    url: profile ? `https://loul.ink/${profile.username}` : undefined,
+    ogType: profile ? "profile" : "website",
   });
+
+  // JSON-LD for in-SPA navigation (server already injects this on direct load)
+  useEffect(() => {
+    if (!profile || status !== "found") return;
+    const BUSINESS_CATS = new Set([
+      "retail", "thrift", "restaurant", "coffee-shop", "bar", "services",
+      "news-outlet", "podcast", "music-venue", "gallery", "event-space",
+      "nonprofit", "organization", "collective",
+    ]);
+    const isBusiness = profile.categories.some((c) => BUSINESS_CATS.has(c));
+    const profileUrl = `https://loul.ink/${profile.username}`;
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": isBusiness ? "LocalBusiness" : "Person",
+      "name": profile.display_name,
+      "url": profileUrl,
+      ...(seoDescription ? { "description": seoDescription } : {}),
+      ...(profile.avatarUrl ? { "image": profile.avatarUrl } : {}),
+      ...(profile.categories.length > 0 ? { "keywords": profile.categories.map((c) => CATEGORY_LABELS[c] ?? c).join(", ") } : {}),
+      "address": { "@type": "PostalAddress", "addressLocality": "Louisville", "addressRegion": "KY", "addressCountry": "US" },
+      "sameAs": profileUrl,
+    };
+    const existing = document.getElementById("profile-jsonld");
+    if (existing) existing.remove();
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = "profile-jsonld";
+    script.text = JSON.stringify(jsonLd);
+    document.head.appendChild(script);
+    return () => { document.getElementById("profile-jsonld")?.remove(); };
+  }, [profile?.username, status, seoDescription]);
 
   useEffect(() => {
     if (!username) { setStatus("not-found"); return; }

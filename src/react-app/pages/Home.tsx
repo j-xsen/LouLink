@@ -20,7 +20,12 @@ export default function Home() {
   const cachedDir = getCached<DirectoryMember[]>("/api/directory");
   const [members, setMembers] = useState<DirectoryMember[]>(cachedDir ?? []);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(cachedDir ? "ready" : "loading");
-  useSeo({ title: "LouLink | Louisville Link Repertoire" });
+  useSeo({
+    title: "LouLink | Louisville Link Repertoire",
+    description: "The free link page for Louisville artists, musicians, and local businesses. Browse the directory or claim your spot in Louisville's creative community.",
+    url: "https://loul.ink",
+    ogType: "website",
+  });
 
   useEffect(() => {
     if (cachedDir) return;
