@@ -22,13 +22,23 @@ function toLinear(c: number): number {
   return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 }
 
+function luminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
 export function autoTextColor(hexBg: string): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hexBg)) return "#111111";
-  const r = parseInt(hexBg.slice(1, 3), 16);
-  const g = parseInt(hexBg.slice(3, 5), 16);
-  const b = parseInt(hexBg.slice(5, 7), 16);
-  const L = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-  return L > 0.179 ? "#111111" : "#ffffff";
+  return luminance(hexBg) > 0.179 ? "#111111" : "#ffffff";
+}
+
+export function adaptTextColor(textHex: string, bgHex: string): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(textHex) || !/^#[0-9a-fA-F]{6}$/.test(bgHex)) return autoTextColor(bgHex);
+  const bgNeedsLight = luminance(bgHex) <= 0.179;
+  const textIsLight = luminance(textHex) > 0.179;
+  return bgNeedsLight === textIsLight ? textHex : autoTextColor(bgHex);
 }
 
 export async function extractDominantColor(src: string): Promise<string | null> {

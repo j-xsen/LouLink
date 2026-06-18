@@ -3,11 +3,11 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { Settings, BarChart2, Pencil, Camera } from "lucide-react";
+import { Settings, BarChart2, Pencil, Camera, ArrowUpRight } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
-import { autoTextColor, generateCardPalette } from "../lib/color";
+import { adaptTextColor, autoTextColor, generateCardPalette } from "../lib/color";
 import { Icon, BRAND_COLORS } from "../components/icons";
 import { AvatarImage, AvatarOverlay } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
@@ -597,21 +597,21 @@ export default function ProfilePage() {
       {/* Owner bookmark tabs — analytics + theme palette */}
       {isOwner && !paletteOpen && (
         <>
-          <Link
-            to="/create"
-            title="Edit links"
+          <button
+            type="button"
+            title="Open theme palette"
+            onClick={() => setPaletteOpen(true)}
             style={{
               position: "fixed", bottom: 0, right: 96,
               width: 44, height: 36,
               background: `${theme.card}f0`, backdropFilter: "blur(12px)",
               border: `1px solid ${theme.label}30`, borderBottom: "none",
               borderRadius: "8px 8px 0 0",
-              color: theme.text,
-              textDecoration: "none",
+              color: theme.cardText, fontSize: "0.85rem",
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 100, boxShadow: "0 -2px 8px #0002",
             }}
-          ><Pencil size={16} /></Link>
+          ><Pencil size={16} /></button>
           <Link
             to="/analytics"
             title="View analytics"
@@ -626,22 +626,22 @@ export default function ProfilePage() {
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 100, boxShadow: "0 -2px 8px #0002",
             }}
-          ><BarChart2 size={16} /></Link>
-          <button
-            type="button"
-            title="Open theme palette"
-            onClick={() => setPaletteOpen(true)}
+          ><BarChart2 size={16} /><ArrowUpRight size={11} style={{ position: "absolute", top: 3, right: 3, opacity: 0.45 }} /></Link>
+          <Link
+            to="/create"
+            title="Edit links"
             style={{
               position: "fixed", bottom: 0, right: 0,
               width: 44, height: 36,
               background: `${theme.card}f0`, backdropFilter: "blur(12px)",
               border: `1px solid ${theme.label}30`, borderBottom: "none",
               borderRadius: "8px 8px 0 0",
-              color: theme.cardText, fontSize: "0.85rem",
+              color: theme.text,
+              textDecoration: "none",
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 100, boxShadow: "0 -2px 8px #0002",
             }}
-          ><Settings size={16} /></button>
+          ><Settings size={16} /><ArrowUpRight size={11} style={{ position: "absolute", top: 3, right: 3, opacity: 0.45 }} /></Link>
         </>
       )}
 
@@ -864,22 +864,25 @@ export default function ProfilePage() {
                   outlineOffset: 2, transition: "outline-color 150ms",
                 }}
               />
-              {/* Contextual swatches: page text, accent/label, header color */}
-              {[theme.text, theme.label, ...(pendingHeader ? [pendingHeader] : [])].filter((c, i, a) => a.indexOf(c) === i).map((hex) => (
-                <button
-                  key={hex}
-                  type="button"
-                  title={hex}
-                  onClick={() => { setPendingCardText(hex); setThemeSaved(false); }}
-                  style={{
-                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                    background: hex, border: `1.5px solid ${theme.cardText}20`,
-                    cursor: "pointer", padding: 0,
-                    outline: pendingCardText === hex ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
-                    outlineOffset: 2, transition: "outline-color 150ms",
-                  }}
-                />
-              ))}
+              {/* Contextual swatches: page text, accent/label, header color — adapted to always contrast with card */}
+              {[theme.text, theme.label, ...(pendingHeader ? [pendingHeader] : [])].filter((c, i, a) => a.indexOf(c) === i).map((rawHex) => {
+                const hex = adaptTextColor(rawHex, pendingCardColor ?? theme.card);
+                return (
+                  <button
+                    key={rawHex}
+                    type="button"
+                    title={hex}
+                    onClick={() => { setPendingCardText(hex); setThemeSaved(false); }}
+                    style={{
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                      background: hex, border: `1.5px solid ${theme.cardText}20`,
+                      cursor: "pointer", padding: 0,
+                      outline: pendingCardText === hex ? `2.5px solid ${theme.cardText}` : "2.5px solid transparent",
+                      outlineOffset: 2, transition: "outline-color 150ms",
+                    }}
+                  />
+                );
+              })}
               {/* Custom text color picker */}
               <label title="Custom card text color" style={{ position: "relative", width: 22, height: 22, flexShrink: 0, cursor: "pointer" }}>
                 <span style={{

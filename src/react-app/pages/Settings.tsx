@@ -472,7 +472,7 @@ export default function Settings() {
             const isCustomCard = cardColor !== null && !palette.includes(cardColor);
             return (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1.25rem" }}>
-                <button type="button" title="Auto" onClick={() => setCardColor(null)}
+                <button type="button" title="Auto" onClick={() => { setCardColor(null); setCardTextColor(null); }}
                   style={{
                     width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
                     background: "none", border: "2px dashed #bbb",
@@ -482,7 +482,7 @@ export default function Settings() {
                   }}
                 />
                 {palette.map((hex) => (
-                  <button key={hex} type="button" title={hex} onClick={() => setCardColor(hex)}
+                  <button key={hex} type="button" title={hex} onClick={() => { setCardColor(hex); setCardTextColor(null); }}
                     style={{
                       width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
                       background: hex,
@@ -503,7 +503,7 @@ export default function Settings() {
                   }}>
                     <input type="color"
                       value={cardColor ?? "#ffffff"}
-                      onChange={(e) => setCardColor(e.target.value)}
+                      onChange={(e) => { setCardColor(e.target.value); setCardTextColor(null); }}
                       style={{ opacity: 0, position: "absolute", inset: 0, width: "100%", height: "100%", cursor: "pointer" }}
                     />
                   </span>
