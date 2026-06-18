@@ -41,6 +41,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ScrollToTop />
+        <main>
         <Routes>
           <Route path="/" element={<IndexRoute />} />
           <Route path="/signin" element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>} />
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/:username" element={<ProfilePage />} />
         </Routes>
+        </main>
       </AuthProvider>
     </BrowserRouter>
   );

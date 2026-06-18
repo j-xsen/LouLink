@@ -128,7 +128,7 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "0.12em",
-                opacity: 0.45,
+                color: "#6a6a6a",
                 marginBottom: "0.5rem",
               }}>
                 {CATEGORY_GROUP_LABELS[groupKey]}
@@ -145,7 +145,7 @@ export function GroupedDirectory({ members }: { members: DirectoryMember[] }) {
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "0.12em",
-                opacity: 0.45,
+                color: "#6a6a6a",
                 marginBottom: "0.5rem",
               }}>
                 Other
