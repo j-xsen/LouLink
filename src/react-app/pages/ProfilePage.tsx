@@ -9,7 +9,7 @@ import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { autoTextColor, generateCardPalette } from "../lib/color";
 import { Icon, BRAND_COLORS } from "../components/icons";
-import { AvatarImage } from "../components/Avatar";
+import { AvatarImage, AvatarOverlay } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
 import { AVATAR_BLOB_SHAPES } from "../components/ui";
 import { useAuth } from "../auth";
@@ -359,6 +359,10 @@ export default function ProfilePage() {
             >
               {profile.avatarUrl ? (
                 <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+              ) : pendingShape !== "circle" ? (
+                <svg width={80} height={80} viewBox={AVATAR_BLOB_SHAPES[pendingShape].viewBox} style={{ display: "block" }}>
+                  <path d={AVATAR_BLOB_SHAPES[pendingShape].d} fill="none" stroke={`${theme.label}60`} strokeWidth="16" strokeDasharray="60,44" />
+                </svg>
               ) : (
                 <div style={{
                   width: 80, height: 80, borderRadius: "50%",
@@ -370,16 +374,9 @@ export default function ProfilePage() {
               {isOwner && (
                 <>
                   {/* Hover overlay for desktop */}
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: "50%",
-                    background: "#00000055",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    opacity: (avatarHover || avatarUploading) ? 1 : 0,
-                    transition: "opacity 150ms",
-                    pointerEvents: "none",
-                  }}>
+                  <AvatarOverlay shape={pendingShape} size={80} visible={avatarHover || avatarUploading}>
                     {avatarUploading && <span style={{ color: "#fff", fontSize: "0.65rem" }}>…</span>}
-                  </div>
+                  </AvatarOverlay>
                   {/* Always-visible camera badge for mobile */}
                   {!avatarUploading && (
                     <span title="Change photo" style={{

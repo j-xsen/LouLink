@@ -2,7 +2,7 @@
 // Avatar components
 // ---------------------------------------------------------------------------
 
-import { useId, useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { AVATAR_BLOB_SHAPES } from "./ui";
 import type { AvatarShape } from "../types";
 
@@ -29,6 +29,44 @@ export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "
   }
   return (
     <img src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+  );
+}
+
+export function AvatarOverlay({ shape, size, visible, children }: {
+  shape: AvatarShape; size: number; visible: boolean; children?: React.ReactNode;
+}) {
+  const uid = useId().replace(/:/g, "");
+  const baseStyle: React.CSSProperties = {
+    position: "absolute", inset: 0,
+    opacity: visible ? 1 : 0,
+    transition: "opacity 150ms",
+    pointerEvents: "none",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+
+  if (shape !== "circle") {
+    const { viewBox, d } = AVATAR_BLOB_SHAPES[shape];
+    const [, , w, h] = viewBox.split(" ").map(Number);
+    const clipId = `overlay-clip-${uid}`;
+    return (
+      <svg style={{ ...baseStyle, overflow: "hidden" }} width={size} height={size} viewBox={viewBox}>
+        <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>
+        <rect width={w} height={h} fill="#00000055" clipPath={`url(#${clipId})`} />
+        {children && (
+          <foreignObject x="0" y="0" width={w} height={h}>
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {children}
+            </div>
+          </foreignObject>
+        )}
+      </svg>
+    );
+  }
+
+  return (
+    <div style={{ ...baseStyle, borderRadius: "50%", background: "#00000055" }}>
+      {children}
+    </div>
   );
 }
 
