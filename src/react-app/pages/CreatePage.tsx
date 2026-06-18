@@ -15,6 +15,33 @@ import { Icon, IconPicker, BRAND_COLORS } from "../components/icons";
 import { useNavigationWarning } from "../lib/useNavigationWarning";
 import type { DraftItem, DraftHeader } from "../types";
 
+const DOMAIN_INFER: Record<string, { title: string; icon: string }> = {
+  "youtube.com":    { title: "YouTube",    icon: "YouTube" },
+  "youtu.be":       { title: "YouTube",    icon: "YouTube" },
+  "instagram.com":  { title: "Instagram",  icon: "Instagram" },
+  "facebook.com":   { title: "Facebook",   icon: "Facebook" },
+  "fb.com":         { title: "Facebook",   icon: "Facebook" },
+  "twitter.com":    { title: "Twitter",    icon: "Twitter" },
+  "x.com":          { title: "Twitter",    icon: "Twitter" },
+  "twitch.tv":      { title: "Twitch",     icon: "Twitch" },
+  "spotify.com":    { title: "Spotify",    icon: "Spotify" },
+  "bandcamp.com":   { title: "Bandcamp",   icon: "Bandcamp" },
+  "soundcloud.com": { title: "SoundCloud", icon: "SoundCloud" },
+};
+
+function inferFromUrl(raw: string): { title?: string; icon?: string } {
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let hostname: string;
+  try {
+    hostname = new URL(candidate).hostname.replace(/^www\./, "");
+  } catch {
+    return {};
+  }
+  if (DOMAIN_INFER[hostname]) return DOMAIN_INFER[hostname];
+  const name = hostname.split(".")[0];
+  return { title: name.charAt(0).toUpperCase() + name.slice(1) };
+}
+
 export default function CreatePage() {
   const navigate = useNavigate();
   const { session, profile, loadSession } = useAuth();
@@ -339,7 +366,14 @@ export default function CreatePage() {
                     </label>
                     <label>
                       <span style={fieldLabel}>URL</span>
-                      <input type="text" value={item.url} onChange={(e) => updateItem(i, { url: e.target.value })} />
+                      <input type="text" value={item.url} onChange={(e) => {
+                        const url = e.target.value;
+                        const patch: Partial<DraftItem> = { url };
+                        const inf = inferFromUrl(url);
+                        if (!item.title.trim() && inf.title) patch.title = inf.title;
+                        if (!item.icon && inf.icon) patch.icon = inf.icon;
+                        updateItem(i, patch);
+                      }} />
                     </label>
                     <div>
                       <span style={fieldLabel}>Icon</span>
@@ -371,7 +405,13 @@ export default function CreatePage() {
                 <input
                   type="text"
                   value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onChange={(e) => {
+                    const url = e.target.value;
+                    setLinkUrl(url);
+                    const inf = inferFromUrl(url);
+                    if (!linkTitle.trim() && inf.title) setLinkTitle(inf.title);
+                    if (!linkIcon && inf.icon) setLinkIcon(inf.icon);
+                  }}
                 />
               </label>
               <div>
