@@ -393,6 +393,7 @@ app.put("/api/me/directory-visibility", requireAuth, async (c) => {
     RETURNING username, display_name, bio, categories, verified, hide_from_directory, avatar_asset_id, social_links, accent_color
   `;
   if (!profile) return c.json({ error: "Not allowed" }, 403);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
   return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) } });
 });
 
