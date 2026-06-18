@@ -104,6 +104,22 @@ export default function Dashboard() {
         </div>
       </div>
       <hr style={{ margin: "1.5rem 0", opacity: 0.2 }} />
+      {!profile.verified && (
+        <div style={{
+          background: "#fff7ed",
+          border: "1px solid #fed7aa",
+          borderRadius: "0.75rem",
+          padding: "1rem 1.25rem",
+          margin: "0 0 1rem",
+        }}>
+          <p style={{ fontWeight: 700, color: "#9a3412", margin: "0 0 0.25rem" }}>
+            Page not appearing?
+          </p>
+          <p style={{ color: "#7c2d12", margin: 0, fontSize: "0.9rem" }}>
+            Profiles only show up in the repertoire after human verification.
+          </p>
+        </div>
+      )}
       {dirStatus === "loading" && <p style={{ opacity: 0.5 }}>Loading members…</p>}
       {dirStatus === "error" && <p style={{ opacity: 0.5 }}>Could not load the directory.</p>}
       {dirStatus === "ready" && members.length === 0 && (
