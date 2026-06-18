@@ -35,7 +35,6 @@ export default function Dashboard() {
   }, [menuOpen]);
 
   useEffect(() => {
-    if (cachedDir) return;
     fetch("/api/directory")
       .then((r) => r.json())
       .then((data) => { setCached("/api/directory", data); setMembers(data as DirectoryMember[]); setDirStatus("ready"); })

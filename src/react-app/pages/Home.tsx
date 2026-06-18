@@ -28,7 +28,6 @@ export default function Home() {
   });
 
   useEffect(() => {
-    if (cachedDir) return;
     fetch("/api/directory")
       .then((r) => r.json())
       .then((data) => { setCached("/api/directory", data); setMembers(data as DirectoryMember[]); setStatus("ready"); })

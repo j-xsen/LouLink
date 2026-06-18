@@ -150,7 +150,6 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!username) { setStatus("not-found"); return; }
-    if (cachedProfile) return;
     fetch(`/api/profile/${encodeURIComponent(username)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
