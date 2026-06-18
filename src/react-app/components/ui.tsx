@@ -4,7 +4,7 @@
 
 import { useId } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Move } from "lucide-react";
 import logoFullColor from "../assets/logo-full-color.svg";
 const shape2 = "/shapes/shape-2.svg";
 const shape4 = "/shapes/shape-4.svg";
@@ -164,18 +164,8 @@ export const BLOB_SHAPES = {
   },
 } as const;
 
-// ---------------------------------------------------------------------------
-// DragHandle — custom wavy-lines drag icon (replaces generic grid dots)
-// ---------------------------------------------------------------------------
-
 export function DragHandle({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={Math.round(size * 0.7)} viewBox="0 0 20 14" fill="none">
-      <path d="M2,3 Q6,1 10,3 Q14,5 18,3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M2,7 Q6,5 10,7 Q14,9 18,7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M2,11 Q6,9 10,11 Q14,13 18,11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
+  return <Move size={size} />;
 }
 
 export function BlobButton({
