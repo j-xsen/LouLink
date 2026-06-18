@@ -464,7 +464,7 @@ app.get("/avatars/*", async (c) => {
   return new Response(obj.body as ReadableStream, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=300, s-maxage=3600",
+      "Cache-Control": "public, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
     },
   });

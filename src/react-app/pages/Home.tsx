@@ -40,6 +40,9 @@ export default function Home() {
         <Link to="/"><img
           src={logoFullColor}
           alt="LouLink"
+          width="1847"
+          height="862"
+          fetchPriority="high"
           style={{ width: "min(55%, 220px)", height: "auto" }}
         /></Link>
       </div>
