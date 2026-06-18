@@ -27,8 +27,9 @@ export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise
     ),
     totals AS (
       SELECT profile_id,
-             COUNT(*)::int                   AS total_views,
-             ROUND(AVG(duration_ms))::int    AS avg_duration_ms
+             COUNT(*)::int                        AS total_views,
+             COUNT(DISTINCT visitor_hash)::int    AS unique_visitors,
+             ROUND(AVG(duration_ms))::int         AS avg_duration_ms
       FROM src GROUP BY profile_id
     ),
     by_country AS (
@@ -74,11 +75,12 @@ export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise
       ) x GROUP BY profile_id
     )
     INSERT INTO public.page_view_daily
-      (profile_id, day, total_views, by_country, by_city, by_browser, by_os, by_device, by_referrer, by_visit_kind, avg_duration_ms)
+      (profile_id, day, total_views, unique_visitors, by_country, by_city, by_browser, by_os, by_device, by_referrer, by_visit_kind, avg_duration_ms)
     SELECT
       t.profile_id,
       ${day}::date,
       t.total_views,
+      t.unique_visitors,
       COALESCE(bc.v,  '{}'),
       COALESCE(bct.v, '{}'),
       COALESCE(bb.v,  '{}'),

@@ -12,6 +12,7 @@ type Period = "7d" | "30d" | "90d" | "all";
 type AnalyticsData = {
   summary: {
     total_views: number;
+    unique_visitors: number;
     total_clicks: number;
     avg_duration_ms: number | null;
     top_country: string | null;
@@ -192,6 +193,7 @@ export default function Analytics() {
           {/* Summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.65rem", marginBottom: "1.5rem" }}>
             <StatCard label="Page views" value={data.summary.total_views.toLocaleString()} />
+            <StatCard label="Unique visitors" value={data.summary.unique_visitors.toLocaleString()} />
             <StatCard label="Link clicks" value={data.summary.total_clicks.toLocaleString()} />
             <StatCard
               label="Avg. visit duration"

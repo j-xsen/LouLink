@@ -59,6 +59,15 @@ export function classifyReferrer(referrer: string | null | undefined): "direct" 
   return "referral";
 }
 
+export async function computeVisitorHash(ip: string, ua: string): Promise<string> {
+  const data = new TextEncoder().encode(`${ip}:${ua}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+}
+
 export function mergeJsonbCounts(rows: Record<string, unknown>[], key: string): Record<string, number> {
   const result: Record<string, number> = {};
   for (const row of rows) {

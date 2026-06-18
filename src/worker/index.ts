@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requireAuth, optionalAuth, requireAdmin } from "./auth";
 import { createDb } from "./db";
-import { isBot, parseUserAgent, classifyReferrer, mergeJsonbCounts } from "./analytics";
+import { isBot, parseUserAgent, classifyReferrer, mergeJsonbCounts, computeVisitorHash } from "./analytics";
 import { handleScheduled } from "./cron";
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/;
@@ -830,15 +830,16 @@ app.post("/api/track/view", optionalAuth, async (c) => {
   const cf = c.req.raw.cf as Record<string, unknown> | undefined;
   const { browser, os, device_type } = parseUserAgent(ua ?? "");
   const visit_kind = classifyReferrer(referrer);
+  const visitorHash = await computeVisitorHash(ip, ua ?? "");
 
   const [event] = await sql`
     INSERT INTO public.page_view_events
-      (profile_id, country, city, browser, os, device_type, referrer, visit_kind)
+      (profile_id, country, city, browser, os, device_type, referrer, visit_kind, visitor_hash)
     VALUES (
       ${profileRow.user_id as string},
       ${(cf?.country as string | undefined) ?? null},
       ${(cf?.city as string | undefined) ?? null},
-      ${browser}, ${os}, ${device_type}, ${referrer}, ${visit_kind}
+      ${browser}, ${os}, ${device_type}, ${referrer}, ${visit_kind}, ${visitorHash}
     )
     RETURNING id
   `;
@@ -931,7 +932,9 @@ app.get("/api/me/analytics", requireAuth, async (c) => {
     const cutoffIso = cutoff.toISOString();
 
     const [totals] = await sql`
-      SELECT COUNT(*)::int AS total_views, ROUND(AVG(duration_ms))::int AS avg_duration_ms
+      SELECT COUNT(*)::int AS total_views,
+             COUNT(DISTINCT visitor_hash)::int AS unique_visitors,
+             ROUND(AVG(duration_ms))::int AS avg_duration_ms
       FROM public.page_view_events
       WHERE profile_id = ${userId} AND occurred_at >= ${cutoffIso}::timestamptz
     `;
@@ -1010,6 +1013,7 @@ app.get("/api/me/analytics", requireAuth, async (c) => {
     return c.json({
       summary: {
         total_views: (totals?.total_views as number) ?? 0,
+        unique_visitors: (totals?.unique_visitors as number) ?? 0,
         total_clicks: (totalClicks?.total_clicks as number) ?? 0,
         avg_duration_ms: (totals?.avg_duration_ms as number | null) ?? null,
         top_country: countryRows[0]?.k ?? null,
@@ -1043,6 +1047,7 @@ app.get("/api/me/analytics", requireAuth, async (c) => {
     : await sql`SELECT * FROM public.page_view_daily WHERE profile_id = ${userId} ORDER BY day ASC`;
 
   const totalViews = (dailyRows as { total_views: number }[]).reduce((s, r) => s + r.total_views, 0);
+  const uniqueVisitors = (dailyRows as { unique_visitors: number }[]).reduce((s, r) => s + r.unique_visitors, 0);
   const durRows = (dailyRows as { avg_duration_ms: number | null; total_views: number }[]).filter((r) => r.avg_duration_ms != null);
   const avgDur = durRows.length
     ? Math.round(durRows.reduce((s, r) => s + r.avg_duration_ms! * r.total_views, 0) / durRows.reduce((s, r) => s + r.total_views, 0))
@@ -1085,6 +1090,7 @@ app.get("/api/me/analytics", requireAuth, async (c) => {
   return c.json({
     summary: {
       total_views: totalViews,
+      unique_visitors: uniqueVisitors,
       total_clicks: totalClicks,
       avg_duration_ms: avgDur,
       top_country: topCountry,

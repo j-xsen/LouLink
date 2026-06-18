@@ -103,6 +103,7 @@ Raw analytics events. Rows are purged after 30 days by a nightly Cron Trigger (s
 | `referrer` | `text` | From `Referer` header, nullable |
 | `visit_kind` | `text` | `direct`, `social`, `search`, or `referral` — classified from referrer |
 | `duration_ms` | `integer` | Time on page in ms, sent via `navigator.sendBeacon` on unmount; capped at 4 hours |
+| `visitor_hash` | `text` | SHA-256 of `IP:UserAgent` truncated to 32 hex chars — used to count distinct visitors; no PII stored |
 
 ### `public.page_view_daily`
 
@@ -121,6 +122,7 @@ Aggregated rollups kept indefinitely. One row per profile per calendar day, writ
 | `by_device` | `jsonb` | `{ "mobile": 25, "desktop": 17 }` |
 | `by_referrer` | `jsonb` | `{ "instagram.com": 18, "direct": 24 }` |
 | `by_visit_kind` | `jsonb` | `{ "social": 18, "direct": 24, "search": 5, "referral": 3 }` |
+| `unique_visitors` | `integer` | Count of distinct `visitor_hash` values that day |
 | `avg_duration_ms` | `integer` | Weighted average time on page for that day, nullable |
 
 Unique constraint on `(profile_id, day)` — each day is written once and never updated.
