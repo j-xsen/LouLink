@@ -500,7 +500,7 @@ app.get("/api/og", async (c) => {
     /* timeout or network error */
   }
 
-  c.header("Cache-Control", "public, max-age=3600");
+  c.header("Cache-Control", "public, max-age=300");
   return c.json({ ogImage });
 });
 

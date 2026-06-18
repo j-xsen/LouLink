@@ -199,7 +199,9 @@ export default function ProfilePage() {
       fetch(`/api/og?url=${encodeURIComponent(url)}`)
         .then((r) => r.ok ? r.json() : null)
         .then((d: { ogImage: string | null } | null) => {
-          setOgImages((prev) => ({ ...prev, [url]: d?.ogImage ?? null }));
+          const raw = d?.ogImage ?? null;
+          const ogImage = raw ? raw.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') : null;
+          setOgImages((prev) => ({ ...prev, [url]: ogImage }));
         })
         .catch(() => {
           setOgImages((prev) => ({ ...prev, [url]: null }));
