@@ -38,8 +38,24 @@ function inferFromUrl(raw: string): { title?: string; icon?: string } {
     return {};
   }
   if (DOMAIN_INFER[hostname]) return DOMAIN_INFER[hostname];
+  for (const domain of Object.keys(DOMAIN_INFER)) {
+    if (hostname.endsWith(`.${domain}`)) return DOMAIN_INFER[domain];
+  }
   const name = hostname.split(".")[0];
   return { title: name.charAt(0).toUpperCase() + name.slice(1) };
+}
+
+async function fetchPageTitle(raw: string): Promise<string | null> {
+  const candidate = /^https?:\/\//i.test(raw) ? raw.trim() : `https://${raw.trim()}`;
+  try { new URL(candidate); } catch { return null; }
+  try {
+    const res = await fetch(`/api/fetch-title?url=${encodeURIComponent(candidate)}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { title: string | null };
+    return data.title ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export default function CreatePage() {
@@ -81,6 +97,14 @@ export default function CreatePage() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [pendingNavigate, setPendingNavigate] = useState(false);
+
+  useEffect(() => {
+    if (pendingNavigate && !hasChanges) {
+      navigate("/");
+      setPendingNavigate(false);
+    }
+  }, [pendingNavigate, hasChanges, navigate]);
   const [username, setUsername] = useState("");
   const checkStatus = useUsernameCheck(username);
 
@@ -132,7 +156,7 @@ export default function CreatePage() {
     deleteCached(`/api/profile/${profile.username}`);
     setSavedItems(items);
     setSavedSocialLinks(socialLinks);
-    navigate("/");
+    setPendingNavigate(true);
   }
 
   function handleCancel() {
@@ -361,19 +385,29 @@ export default function CreatePage() {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                     <label>
-                      <span style={fieldLabel}>Title</span>
-                      <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
+                      <span style={fieldLabel}>URL</span>
+                      <input type="text" value={item.url} onChange={(e) => updateItem(i, { url: e.target.value })} onPaste={(e) => {
+                        const pasted = e.clipboardData.getData("text");
+                        const inf = inferFromUrl(pasted);
+                        const patch: Partial<DraftItem> = {};
+                        if (!item.icon && inf.icon) patch.icon = inf.icon;
+                        if (Object.keys(patch).length > 0) updateItem(i, patch);
+                        fetchPageTitle(pasted).then(title => {
+                          const resolved = title ?? inf.title ?? null;
+                          if (!resolved) return;
+                          setItems(prev => {
+                            const cur = prev[i];
+                            if (!cur || cur.kind !== "link" || cur.title.trim()) return prev;
+                            const next = prev.map((it, idx) => idx === i ? { ...it, title: resolved } : it) as DraftItem[];
+                            if (!profile) saveDraft({ items: next });
+                            return next;
+                          });
+                        });
+                      }} />
                     </label>
                     <label>
-                      <span style={fieldLabel}>URL</span>
-                      <input type="text" value={item.url} onChange={(e) => {
-                        const url = e.target.value;
-                        const patch: Partial<DraftItem> = { url };
-                        const inf = inferFromUrl(url);
-                        if (!item.title.trim() && inf.title) patch.title = inf.title;
-                        if (!item.icon && inf.icon) patch.icon = inf.icon;
-                        updateItem(i, patch);
-                      }} />
+                      <span style={fieldLabel}>Title</span>
+                      <input type="text" value={item.title} onChange={(e) => updateItem(i, { title: e.target.value })} />
                     </label>
                     <div>
                       <span style={fieldLabel}>Icon</span>
@@ -393,25 +427,28 @@ export default function CreatePage() {
             <p style={{ fontFamily: "'Aladin', Georgia, serif", fontSize: "1.2rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#12080b", margin: "0 0 1rem" }}>Add a Link</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               <label>
+                <span style={fieldLabel}>URL</span>
+                <input
+                  type="text"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    const inf = inferFromUrl(pasted);
+                    if (!linkIcon && inf.icon) setLinkIcon(inf.icon);
+                    fetchPageTitle(pasted).then(title => {
+                      const resolved = title ?? inf.title ?? null;
+                      if (resolved) setLinkTitle(prev => prev.trim() ? prev : resolved);
+                    });
+                  }}
+                />
+              </label>
+              <label>
                 <span style={fieldLabel}>Title</span>
                 <input
                   type="text"
                   value={linkTitle}
                   onChange={(e) => setLinkTitle(e.target.value)}
-                />
-              </label>
-              <label>
-                <span style={fieldLabel}>URL</span>
-                <input
-                  type="text"
-                  value={linkUrl}
-                  onChange={(e) => {
-                    const url = e.target.value;
-                    setLinkUrl(url);
-                    const inf = inferFromUrl(url);
-                    if (!linkTitle.trim() && inf.title) setLinkTitle(inf.title);
-                    if (!linkIcon && inf.icon) setLinkIcon(inf.icon);
-                  }}
                 />
               </label>
               <div>

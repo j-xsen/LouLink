@@ -599,6 +599,36 @@ app.get("/api/og", async (c) => {
   return c.json({ ogImage });
 });
 
+app.get("/api/fetch-title", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = ip === "unknown" ? { success: true } : await c.env.OG_RATE_LIMITER.limit({ key: ip });
+  if (!success) return c.json({ error: "Too many requests" }, 429);
+  const url = sanitizeUrl(c.req.query("url") ?? "");
+  if (!url) return c.json({ title: null }, 400);
+  let title: string | null = null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "LouLink/1.0 (+https://loul.ink)" },
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const chunks: string[] = [];
+      await new HTMLRewriter()
+        .on("title", { text(chunk) { chunks.push(chunk.text); } })
+        .transform(res)
+        .arrayBuffer();
+      title = chunks.join("").trim() || null;
+      if (title) title = title.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    }
+  } catch { /* timeout or network error */ }
+  c.header("Cache-Control", "public, max-age=3600");
+  return c.json({ title });
+});
+
 // Proxy for OG images — fetches the image server-side so hotlink-protected CDNs
 // (e.g. Instagram's scontent CDN) are served from our domain instead of the browser
 // hitting them directly and receiving 403.
