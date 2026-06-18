@@ -47,6 +47,10 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
+  const [displayNameError, setDisplayNameError] = useState("");
+  const [displayNameSuccess, setDisplayNameSuccess] = useState(false);
+  const [displayNameSubmitting, setDisplayNameSubmitting] = useState(false);
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [bioError, setBioError] = useState("");
   const [bioSuccess, setBioSuccess] = useState(false);
@@ -93,6 +97,26 @@ export default function Settings() {
       deleteCached("/api/directory");
     }
     setVisibilitySubmitting(false);
+  }
+
+  async function handleDisplayNameSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session) return;
+    setDisplayNameSubmitting(true);
+    setDisplayNameError("");
+    setDisplayNameSuccess(false);
+    const res = await fetch("/api/me/display-name", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ display_name: displayName }),
+    });
+    const d = await res.json();
+    if (!res.ok) { setDisplayNameError(d.error ?? "Failed to update."); setDisplayNameSubmitting(false); return; }
+    setDisplayNameSuccess(true);
+    setDisplayNameSubmitting(false);
+    deleteCached(`/api/profile/${profile?.username}`);
+    deleteCached("/api/directory");
+    await loadSession();
   }
 
   async function handleBioSubmit(e: React.FormEvent) {
@@ -235,6 +259,29 @@ export default function Settings() {
         )}
       </div>
 
+      {/* Display name */}
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Display name</h2>
+        <form onSubmit={handleDisplayNameSubmit}>
+          <label>
+            <span className="settings-label">Your public name (max 100 characters)</span>
+            <input
+              type="text"
+              value={displayName}
+              maxLength={100}
+              onChange={(e) => { setDisplayName(e.target.value); setDisplayNameSuccess(false); }}
+              required
+            />
+          </label>
+          <div style={{ fontSize: "0.85rem", color: "#888", textAlign: "right", marginTop: "0.25rem" }}>{displayName.length}/100</div>
+          {displayNameError && <p style={{ textAlign: "center" }}><strong>{displayNameError}</strong></p>}
+          {displayNameSuccess && <p style={{ textAlign: "center" }}>Display name updated!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <BlobButton blob="G" disabled={displayNameSubmitting || !displayName.trim()} from="#0ea5e9" to="#6366f1">Save display name</BlobButton>
+          </p>
+        </form>
+      </div>
+
       {/* Unified appearance */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Profile appearance</h2>
@@ -254,7 +301,7 @@ export default function Settings() {
                 }
               </div>
               <div style={{ fontSize: "1rem", fontWeight: 700, color: previewTheme.text, marginBottom: "0.75rem" }}>
-                {profile.display_name}
+                {displayName || profile.display_name}
               </div>
               <div style={{
                 fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em",

@@ -231,6 +231,23 @@ app.put("/api/me/bio", requireAuth, async (c) => {
   return c.json({ profile });
 });
 
+app.put("/api/me/display-name", requireAuth, async (c) => {
+  const userId = c.get("userId");
+  const body = await readJson<{ display_name?: unknown }>(c);
+  const display_name = typeof body?.display_name === "string" ? body.display_name.trim() : "";
+  if (!display_name || display_name.length > MAX_DISPLAY_NAME)
+    return c.json({ error: `Display name is required (max ${MAX_DISPLAY_NAME} characters)` }, 400);
+  const sql = createDb(c.env.DATABASE_URL);
+  const [profile] = await sql`
+    UPDATE public.profiles SET display_name = ${display_name}, updated_at = now()
+    WHERE user_id = ${userId}
+    RETURNING username
+  `;
+  if (!profile) return c.json({ error: "Profile not found" }, 404);
+  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
+  return c.json({ ok: true });
+});
+
 app.put("/api/me/accent", requireAuth, async (c) => {
   const userId = c.get("userId");
   const body = await readJson<{ accent_color?: unknown; header_color?: unknown; mono_social?: unknown; avatar_shape?: unknown; card_color?: unknown; card_text_color?: unknown }>(c);
