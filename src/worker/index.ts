@@ -381,7 +381,7 @@ app.put("/api/me/directory-visibility", requireAuth, async (c) => {
 
 app.get("/api/username/:username/available", async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
@@ -393,7 +393,7 @@ app.get("/api/username/:username/available", async (c) => {
 
 app.get("/api/profile/:username", async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ error: "Not found" }, 404);
@@ -443,12 +443,71 @@ app.get("/avatars/*", async (c) => {
 
 // OG meta — used by the public profile page to show link preview thumbnails.
 // Fetches up to the first ~64 KB of the target page and extracts og:image.
+// Domains that block server-side OG scraping from data center IPs (serve generic/brand images instead)
+const OG_BLOCKED_HOSTS = new Set([
+  "www.instagram.com", "instagram.com",
+  "www.facebook.com", "facebook.com", "fb.com",
+  "www.tiktok.com", "tiktok.com",
+  "twitter.com", "x.com",
+]);
+
+// Returns an unavatar.io URL for recognized social profile URLs, or null for non-profile paths.
+// The API key is NOT included here — it is injected server-side in /api/og-img.
+function getSocialAvatarUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const slug = parts[0].replace(/^@/, "");
+
+    if (host === "instagram.com") {
+      if (["p", "reel", "stories", "explore", "tv", "direct"].includes(slug)) return null;
+      return `https://unavatar.io/instagram/${encodeURIComponent(slug)}`;
+    }
+    if (host === "twitter.com" || host === "x.com") {
+      if (["i", "home", "search", "explore", "notifications", "messages"].includes(slug)) return null;
+      return `https://unavatar.io/twitter/${encodeURIComponent(slug)}`;
+    }
+    if (host === "tiktok.com") {
+      return `https://unavatar.io/tiktok/${encodeURIComponent(slug)}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 app.get("/api/og", async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.OG_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.OG_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
   const url = sanitizeUrl(c.req.query("url") ?? "");
   if (!url) return c.json({ ogImage: null }, 400);
+
+  // Social media profiles — use unavatar.io (API key injected server-side in /api/og-img)
+  const socialAvatar = getSocialAvatarUrl(url);
+  if (socialAvatar) {
+    // If og-img already cached a 404 for this avatar (unavatar returned its fallback logo),
+    // skip it now so the client never renders a doomed <img> and gets no console error.
+    const ogImgCacheKey = new URL(c.req.url).origin + `/api/og-img?url=${encodeURIComponent(socialAvatar)}`;
+    const ogImgCached = await caches.default.match(ogImgCacheKey);
+    if (ogImgCached && !ogImgCached.ok) {
+      c.header("Cache-Control", "public, max-age=3600");
+      return c.json({ ogImage: null });
+    }
+    c.header("Cache-Control", "public, max-age=86400");
+    return c.json({ ogImage: socialAvatar });
+  }
+
+  // Platforms that block data-center scraping entirely
+  try {
+    const host = new URL(url).hostname;
+    if (OG_BLOCKED_HOSTS.has(host)) {
+      c.header("Cache-Control", "public, max-age=300");
+      return c.json({ ogImage: null });
+    }
+  } catch { /* invalid URL already caught by sanitizeUrl */ }
 
   let ogImage: string | null = null;
   try {
@@ -514,14 +573,21 @@ app.get("/api/og-img", async (c) => {
   const url = sanitizeUrl(c.req.query("url") ?? "");
   if (!url) return new Response("Bad request", { status: 400 });
 
+  const cacheKey = new URL(c.req.url).origin + `/api/og-img?url=${encodeURIComponent(url)}`;
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return new Response(cached.body, { status: cached.status, headers: new Headers(cached.headers) });
+
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const isUnavatar = new URL(url).hostname === "unavatar.io";
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; LouLink/1.0; +https://loul.ink)",
-        "Referer": new URL(url).origin + "/",
+        "Referer": "https://loul.ink/",
+        "Origin": "https://loul.ink",
+        ...(isUnavatar && c.env.UNAVATAR_API_KEY ? { "x-api-key": c.env.UNAVATAR_API_KEY } : {}),
       },
       redirect: "follow",
     });
@@ -531,6 +597,12 @@ app.get("/api/og-img", async (c) => {
     const contentType = res.headers.get("content-type") ?? "";
     const mimeBase = contentType.split(";")[0].trim();
     if (!ALLOWED_IMAGE_TYPES.has(mimeBase)) return new Response("Not an image", { status: 415 });
+    // Unavatar's fallback logo is a PNG; real social CDN profile pictures are always JPEG.
+    if (isUnavatar && mimeBase !== "image/jpeg") {
+      const miss = new Response("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=3600" } });
+      caches.default.put(cacheKey, miss.clone()).catch(() => {});
+      return miss;
+    }
 
     let imgBytes = 0;
     const limiter = new TransformStream<Uint8Array, Uint8Array>({
@@ -540,14 +612,17 @@ app.get("/api/og-img", async (c) => {
         else { ctrl.enqueue(chunk); }
       },
     });
-    const body = res.body?.pipeThrough(limiter) ?? null;
-    return new Response(body, {
+    const imageBuffer = await new Response(res.body?.pipeThrough(limiter) ?? null).arrayBuffer();
+    const maxAge = isUnavatar ? 259200 : 3600;
+    const imageRes = new Response(imageBuffer, {
       headers: {
         "Content-Type": mimeBase,
-        "Cache-Control": "public, max-age=3600",
+        "Cache-Control": `public, max-age=${maxAge}`,
         "X-Content-Type-Options": "nosniff",
       },
     });
+    caches.default.put(cacheKey, imageRes.clone()).catch(() => {});
+    return imageRes;
   } catch {
     return new Response("Failed to fetch image", { status: 502 });
   }
@@ -648,7 +723,7 @@ app.delete("/api/admin/profiles/:username", requireAdmin, async (c) => {
 
 app.get("/api/directory", async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
   const cacheKey = new URL(c.req.url).origin + "/api/directory";
   const cached = await caches.default.match(cacheKey);
@@ -678,7 +753,7 @@ app.get("/api/directory", async (c) => {
 // ---------------------------------------------------------------------------
 app.post("/api/track/view", optionalAuth, async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
 
   const ua = c.req.header("User-Agent");
@@ -747,7 +822,7 @@ app.post("/api/track/duration", async (c) => {
 // ---------------------------------------------------------------------------
 app.post("/api/track/click", optionalAuth, async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const { success } = await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
+  const { success } = ip === "unknown" ? { success: true } : await c.env.UNAUTHED_RATE_LIMITER.limit({ key: ip });
   if (!success) return c.json({ error: "Too many requests" }, 429);
 
   const ua = c.req.header("User-Agent");

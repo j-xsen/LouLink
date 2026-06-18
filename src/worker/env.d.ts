@@ -7,4 +7,5 @@ interface Env {
   CONTENTFUL_SPACE_ID: string;
   CONTENTFUL_DELIVERY_TOKEN: string;
   CONTENTFUL_MANAGEMENT_TOKEN: string;
+  UNAVATAR_API_KEY?: string; // secret key — sent as x-api-key header (authenticated origin requests)
 }
