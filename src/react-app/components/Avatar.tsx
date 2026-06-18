@@ -9,7 +9,7 @@ import type { AvatarShape } from "../types";
 export const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export const MAX_AVATAR_BYTES_CLIENT = 5 * 1024 * 1024;
 
-const AVATAR_MAX_PX = 400;
+const AVATAR_MAX_PX = 200;
 
 export async function resizeAndEncode(file: File): Promise<{ blob: Blob; mimeType: string; dataUrl: string }> {
   const bitmap = await createImageBitmap(file);
@@ -25,7 +25,7 @@ export async function resizeAndEncode(file: File): Promise<{ blob: Blob; mimeTyp
   ctx.drawImage(bitmap, ox, oy, side, side, 0, 0, dim, dim);
   bitmap.close();
   // Try AVIF first, fall back to WebP
-  for (const [type, quality] of [["image/avif", 0.75], ["image/webp", 0.82]] as const) {
+  for (const [type, quality] of [["image/avif", 0.75], ["image/webp", 0.75]] as const) {
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
     if (blob && blob.type === type) {
       const dataUrl = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(blob); });
@@ -56,7 +56,7 @@ export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "
     );
   }
   return (
-    <img key={src} src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+    <img key={src} src={src} alt={alt} width={size} height={size} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
   );
 }
 
