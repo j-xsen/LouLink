@@ -1,15 +1,16 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { createBrowserRouter, Outlet, RouterProvider, useLocation } from "react-router-dom";
 import { AuthProvider, RedirectIfAuthed, RequireProfile, useAuth } from "./auth";
 import Home from "./pages/Home";
-import CreatePage from "./pages/CreatePage";
-import SignIn from "./pages/SignIn";
-import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
-import Settings from "./pages/Settings";
-import ProfilePage from "./pages/ProfilePage";
-import Analytics from "./pages/Analytics";
-import AdminDashboard from "./pages/AdminDashboard";
+
+const CreatePage = lazy(() => import("./pages/CreatePage"));
+const SignIn = lazy(() => import("./pages/SignIn"));
+const SignUp = lazy(() => import("./pages/SignUp"));
+const Settings = lazy(() => import("./pages/Settings"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 // ---------------------------------------------------------------------------
 // ScrollToTop
@@ -58,13 +59,13 @@ const router = createBrowserRouter([
     element: <Root />,
     children: [
       { path: "/", element: <IndexRoute /> },
-      { path: "/signin", element: <RedirectIfAuthed><SignIn /></RedirectIfAuthed> },
-      { path: "/signup", element: <RedirectIfAuthed><SignUp /></RedirectIfAuthed> },
-      { path: "/create", element: <CreatePage /> },
-      { path: "/settings", element: <RequireProfile><Settings /></RequireProfile> },
-      { path: "/analytics", element: <RequireProfile><Analytics /></RequireProfile> },
-      { path: "/admin", element: <AdminDashboard /> },
-      { path: "/:username", element: <ProfilePage /> },
+      { path: "/signin", element: <RedirectIfAuthed><Suspense><SignIn /></Suspense></RedirectIfAuthed> },
+      { path: "/signup", element: <RedirectIfAuthed><Suspense><SignUp /></Suspense></RedirectIfAuthed> },
+      { path: "/create", element: <Suspense><CreatePage /></Suspense> },
+      { path: "/settings", element: <RequireProfile><Suspense><Settings /></Suspense></RequireProfile> },
+      { path: "/analytics", element: <RequireProfile><Suspense><Analytics /></Suspense></RequireProfile> },
+      { path: "/admin", element: <Suspense><AdminDashboard /></Suspense> },
+      { path: "/:username", element: <Suspense><ProfilePage /></Suspense> },
     ],
   },
 ]);
