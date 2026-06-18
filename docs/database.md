@@ -61,8 +61,11 @@ One row per authenticated user. Created during onboarding after first login.
 | `display_name` | `text` NOT NULL | Public name shown on profile and directory |
 | `bio` | `text` | Short description, max 300 chars |
 | `avatar_asset_id` | `text` | R2 object key (e.g. `avatars/<user_id>/<timestamp>.jpg`) — resolved to a URL via `https://loul.ink/avatars/<key>` |
-| `categories` | `text[]` | Array of categories from the set: `music`, `visual-art`, `food`, `retail`, `community`. Users may belong to multiple. |
+| `categories` | `text[]` | Array of granular subcategory slugs. 25 valid values grouped under 5 parent labels — see category hierarchy in `docs/features.md`. Validated server-side in `PUT /api/me/categories`. Admin PATCH uses simplified 5-item parent slugs only. |
 | `verified` | `boolean` DEFAULT false | Admin-controlled Louisville verification flag |
+| `hide_from_directory` | `boolean` DEFAULT false | Verified users can opt out of the home page directory; only honoured when `verified = true` |
+| `social_links` | `jsonb` DEFAULT `'{}'` | Platform → URL map for profile header social icons. Allowed keys: `YouTube`, `Instagram`, `Facebook`, `Twitter`, `Twitch`, `Spotify`, `Bandcamp`, `SoundCloud` |
+| `accent_color` | `text` | Pipe-delimited appearance string: `themeKeyOrHex\|headerHex\|mono\|shape\|cardColor\|cardTextColor`. Theme keys: `ink`, `bluegrass`, `river`, `bourbon`, `midnight`, `terminal`. Avatar shapes: `circle`, `1`, `5`, `6`. Parsed/built by `parseAccentColor()` / `buildAccentColor()` in `src/react-app/types.ts`. |
 | `created_at` | `timestamptz` DEFAULT now() | |
 | `updated_at` | `timestamptz` DEFAULT now() | Auto-updated by trigger |
 

@@ -8,4 +8,5 @@ interface Env {
   CONTENTFUL_DELIVERY_TOKEN: string;
   CONTENTFUL_MANAGEMENT_TOKEN: string;
   UNAVATAR_API_KEY?: string; // secret key — sent as x-api-key header (authenticated origin requests)
+  ADMIN_KEY: string; // plain bearer token — compared directly in requireAdmin middleware (not a JWT)
 }

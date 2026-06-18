@@ -34,15 +34,12 @@ LouLink is a Louisville-specific competitor to Linktree. It gives Louisville art
 ### Verified User (Management)
 1. Logs in → dashboard
 2. Edit links, reorder them, toggle visibility
-3. Update bio/photo (photos served from Contentful)
-4. View basic analytics (future scope)
+3. Update bio, display name, and profile photo (stored in Cloudflare R2)
+4. Customize profile appearance (theme, colors, avatar shape)
+5. Manage social media profile links
+6. View analytics dashboard (page views, link clicks, geo, device, traffic source)
+7. Toggle directory visibility (verified users only)
 
 ## Verification Model
 
-Verification is what keeps the directory trustworthy. Options under consideration:
-- Self-attestation with address (low friction, low trust)
-- Social proof (Louisville-tagged social accounts)
-- Manual admin review queue (highest trust, most work)
-- Future: partner with Louisville orgs for trusted vouching
-
-Until a verification system is built, an admin flag (`verified: boolean`) on the user record controls directory inclusion.
+Verification keeps the directory trustworthy and is entirely admin-controlled. The `profiles.verified` boolean is the sole mechanism — an admin sets it to `true` via the admin dashboard (`/admin`, localhost-only, secured by `ADMIN_KEY`). Unverified users have a profile and links but are excluded from the home page directory.

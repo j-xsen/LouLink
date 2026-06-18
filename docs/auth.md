@@ -76,3 +76,4 @@ if (!profile) return c.json({ error: "Profile not set up", code: "ONBOARDING_REQ
 - A user may only edit their own profile and links — compare `c.get("userId")` to the `profiles.user_id`
 - The `verified` flag may only be set by an admin — gate it behind a `requireAdmin` middleware
 - Profile pages and the directory listing are fully public — no auth required
+- Admin routes (`GET /api/admin/users`, `PATCH /api/admin/profiles/:username`, `DELETE /api/admin/profiles/:username`) require `Authorization: Bearer <ADMIN_KEY>`. This is a plain string comparison against the `ADMIN_KEY` Wrangler secret — not a JWT. Handled by `requireAdmin` in `src/worker/auth.ts`. The admin dashboard frontend (`/admin`) is localhost-only.

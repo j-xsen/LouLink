@@ -32,7 +32,7 @@ This builds the Worker and uploads it to Cloudflare. The `dist/client/` static a
   "triggers": { "crons": ["0 6 * * *"] },
   "unsafe": {
     "bindings": [
-      { "name": "OG_RATE_LIMITER",      "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 20,  "period": 60 } },
+      { "name": "OG_RATE_LIMITER",      "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 200, "period": 60 } },
       { "name": "UNAUTHED_RATE_LIMITER", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 100, "period": 60 } }
     ]
   }
@@ -53,6 +53,8 @@ Local development uses `.dev.vars` (gitignored). Production values are Wrangler 
 # Add secrets to production
 wrangler secret put DATABASE_URL
 wrangler secret put AUTH_JWKS_URL
+wrangler secret put ADMIN_KEY          # Required for admin dashboard operations
+wrangler secret put UNAVATAR_API_KEY   # Optional — authenticated social avatar fetches via unavatar.io
 
 # List all secrets
 wrangler secret list
@@ -62,8 +64,10 @@ After adding secrets, run `pnpm cf-typegen` to regenerate `worker-configuration.
 
 **.dev.vars format:**
 ```
-DATABASE_URL=postgresql://...
-AUTH_JWKS_URL=https://...neonauth.../neondb/auth/.well-known/jwks.json
+DATABASE_URL=<your-neon-connection-string>
+AUTH_JWKS_URL=<your-neon-jwks-url>
+ADMIN_KEY=<your-admin-key>
+# UNAVATAR_API_KEY=<your-key>   # optional
 ```
 
 `VITE_AUTH_URL` (the Better Auth client URL for the frontend) is not a Wrangler secret — it goes in `.env.local` and is baked into the React bundle at build time.

@@ -58,12 +58,11 @@ The `Env` type picks this up automatically via `pnpm cf-typegen` (written to `wo
 
 ## Environment Variables
 
-No Contentful secrets are currently used in the Worker. The following are defined in `src/worker/env.d.ts` as placeholders for future use but are not referenced by any active code:
-
 | Variable | Purpose |
 |---|---|
-| `CONTENTFUL_SPACE_ID` | (future) Contentful space |
-| `CONTENTFUL_DELIVERY_TOKEN` | (future) Content Delivery API |
-| `CONTENTFUL_MANAGEMENT_TOKEN` | (future) Upload/write access |
+| `UNAVATAR_API_KEY` | (optional) Sent as `x-api-key` to `unavatar.io` from `GET /api/og-img` when fetching social profile avatars. If absent, unauthenticated requests are made. |
+| `CONTENTFUL_SPACE_ID` | (future) Contentful space — not referenced by any active code |
+| `CONTENTFUL_DELIVERY_TOKEN` | (future) Content Delivery API — not referenced by any active code |
+| `CONTENTFUL_MANAGEMENT_TOKEN` | (future) Content Management API — not referenced by any active code |
 
-If Contentful is wired up in the future (e.g. for editorial content types like announcements or featured profiles), follow the pattern in the old upload flow: store only the asset ID in Neon, construct URLs at render time.
+If Contentful is wired up in the future (e.g. for editorial content types like announcements or featured profiles), store only the asset ID in Neon and construct URLs at render time.

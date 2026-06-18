@@ -22,7 +22,7 @@ Project documentation lives in `docs/`. Read these before working on any feature
 - `docs/overview.md` — What LouLink is, target users, core user flows, verification model
 - `docs/architecture.md` — Full technical architecture, build targets, routing, how frontend and backend connect
 - `docs/database.md` — Neon (PostgreSQL) schema, connection pattern for Workers, migrations
-- `docs/contentful.md` — Contentful CDN for media, asset upload flow, image optimization
+- `docs/storage.md` — Cloudflare R2 media storage, avatar upload flow, image proxy
 - `docs/auth.md` — Session-based auth, Hono middleware pattern, authorization rules
 - `docs/deployment.md` — Cloudflare Workers deployment, secrets management, custom domain
 - `docs/features.md` — MVP scope, post-MVP roadmap, things that explicitly never go in
@@ -40,9 +40,9 @@ This is a full-stack app that runs entirely on Cloudflare Workers. The single Wo
 - `App.tsx` — router only
 - `auth.tsx` — AuthProvider, useAuth, route guards
 - `types.ts` — shared TypeScript types + constants
-- `lib/` — cache, draft, seo, username utilities
+- `lib/` — cache, color, draft, seo, username utilities
 - `components/` — icons, ui (shapes/blobs), Avatar, Directory
-- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, Settings, ProfilePage)
+- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, Settings, ProfilePage, Analytics, AdminDashboard)
 
 **How they connect:**
 

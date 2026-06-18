@@ -24,6 +24,7 @@ src/
     auth-client.ts        # Better Auth client SDK initialization
     lib/
       cache.ts            # In-memory API response cache (getCached/setCached/deleteCached)
+      color.ts            # autoTextColor(), extractDominantColor(), generateCardPalette()
       draft.ts            # localStorage link-builder draft (getDraft/saveDraft/clearDraft)
       seo.ts              # useSeo hook (document.title + noindex meta)
       username.ts         # validateUsername + useUsernameCheck (debounced availability check)
@@ -38,9 +39,10 @@ src/
       CreatePage.tsx      # Link builder — works without an account; draft saved to localStorage
       SignIn.tsx          # Sign in form
       SignUp.tsx          # Account creation + onboarding (calls POST /api/onboarding)
-      Settings.tsx        # Avatar, bio, categories, username change
+      Settings.tsx        # Avatar, display name, bio, appearance (theme/colors/shape), categories, directory visibility, username change
       ProfilePage.tsx     # Public /:username profile page — fires view/duration/click beacons
       Analytics.tsx       # /analytics dashboard — stat cards, bar charts, link performance table
+      AdminDashboard.tsx  # /admin — localhost-only admin panel, ADMIN_KEY bearer auth
     assets/               # SVG logos, shape blobs, brand icons
   worker/
     index.ts              # Hono API — the Worker entry point
@@ -75,26 +77,37 @@ All API routes live in `src/worker/index.ts`. Route pattern:
 
 ```
 GET  /api/                             → health check
-GET  /api/me                           → current user's profile (auth-gated)
-POST /api/onboarding                   → create profile + initial links (auth-gated)
-PUT  /api/me/links                     → replace all links in bulk (auth-gated)
-PUT  /api/me/categories                → update categories array (auth-gated)
-PUT  /api/me/username                  → change username (auth-gated)
-POST /api/me/avatar                    → upload avatar to R2 (auth-gated)
-GET  /api/me/analytics                 → analytics dashboard data, ?period=7d|30d|90d|all (auth-gated)
-GET  /api/username/:username/available → username availability check (public, rate-limited)
-GET  /api/profile/:username            → public profile + links (public, rate-limited)
-GET  /api/directory                    → all verified users, ordered by display_name (public, rate-limited)
-GET  /api/og                           → fetch og:image from an external URL (public, rate-limited)
-POST /api/track/view                   → record a page view event (public, bot-filtered, self-view prevention)
-POST /api/track/duration               → update duration_ms on an existing view event via sendBeacon
-POST /api/track/click                  → record a link click event (public, bot-filtered, self-click prevention)
-GET  /avatars/*                        → serve R2 avatar objects
-GET  /:username                        → SPA with server-injected OG meta tags
-GET  *                                 → static assets / SPA fallback
+GET  /api/me                               → current user's profile (auth-gated)
+POST /api/onboarding                       → create profile + initial links (auth-gated)
+PUT  /api/me/links                         → replace all links in bulk (auth-gated)
+PUT  /api/me/bio                           → update bio, max 300 chars (auth-gated)
+PUT  /api/me/display-name                  → update display name, max 100 chars (auth-gated)
+PUT  /api/me/categories                    → update categories array (auth-gated)
+PUT  /api/me/accent                        → update accent_color (theme/colors/avatar shape/card colors) (auth-gated)
+PUT  /api/me/social-links                  → update social_links jsonb; validated platform allowlist (auth-gated)
+PUT  /api/me/directory-visibility          → toggle hide_from_directory; verified users only (auth-gated)
+PUT  /api/me/username                      → change username (auth-gated)
+POST /api/me/avatar                        → upload avatar to R2 (auth-gated)
+GET  /api/me/analytics                     → analytics dashboard data, ?period=7d|30d|90d|all (auth-gated)
+GET  /api/username/:username/available     → username availability check (public, rate-limited)
+GET  /api/profile/:username                → public profile + links (public, rate-limited)
+GET  /api/directory                        → all verified users, ordered by display_name (public, rate-limited)
+GET  /api/og                               → fetch og:image from an external URL (public, OG_RATE_LIMITER)
+GET  /api/og-img                           → proxy-fetch an image server-side; adds UNAVATAR_API_KEY for unavatar.io (public, OG_RATE_LIMITER)
+POST /api/track/view                       → record a page view event (public, bot-filtered, self-view prevention)
+POST /api/track/duration                   → update duration_ms on an existing view event via sendBeacon; returns 204
+POST /api/track/click                      → record a link click event (public, bot-filtered, self-click prevention)
+GET  /api/admin/users                      → list all profiles (requireAdmin)
+PATCH /api/admin/profiles/:username        → update verified flag and/or categories (requireAdmin)
+DELETE /api/admin/profiles/:username       → delete profile; cascades links + analytics events (requireAdmin)
+GET  /avatars/*                            → serve R2 avatar objects
+GET  /:username                            → SPA with server-injected OG meta tags
+GET  *                                     → static assets / SPA fallback
 ```
 
 Note: link management is bulk-replace only (`PUT /api/me/links` deletes all existing links and re-inserts the full array). There is no per-link create/update/delete endpoint.
+
+Admin routes (`/api/admin/*`) require `Authorization: Bearer <ADMIN_KEY>` — compared directly against `c.env.ADMIN_KEY` (not a JWT). See `requireAdmin` in `src/worker/auth.ts`.
 
 Analytics tracking routes accept an optional `Authorization` header — if the JWT matches the profile owner, the event is silently dropped (self-view/self-click prevention). Bots are also filtered by User-Agent before any DB write.
 
@@ -118,8 +131,9 @@ React Router handles client-side navigation. Routes:
 /signin    → SignIn page
 /signup    → SignUp + profile creation
 /create    → CreatePage: link builder (works without an account; draft saved to localStorage)
-/settings  → Settings: avatar upload, categories, username change (RequireProfile guard)
+/settings  → Settings: avatar, display name, bio, profile appearance (theme/colors/avatar shape/social icon toggle), categories, directory visibility, username change (RequireProfile guard)
 /analytics → Analytics: views/clicks dashboard (RequireProfile guard)
+/admin     → AdminDashboard: localhost-only admin panel (hostname check inside component; no route guard)
 /:username → ProfilePage: public profile
 ```
 
@@ -139,7 +153,7 @@ Two Cloudflare Workers rate limiter bindings are configured in `wrangler.json` u
 
 | Binding | Limit | Applied to |
 |---|---|---|
-| `OG_RATE_LIMITER` | 20 req/min | `GET /api/og` |
+| `OG_RATE_LIMITER` | 200 req/min | `GET /api/og`, `GET /api/og-img` |
 | `UNAUTHED_RATE_LIMITER` | 100 req/min | `GET /api/profile/:username`, `GET /api/directory`, `GET /api/username/:username/available` |
 
 These use the Cloudflare Workers rate limiting API (namespace IDs `1001` and `1002`). They are keyed per-IP automatically.
