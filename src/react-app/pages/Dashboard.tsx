@@ -120,7 +120,7 @@ export default function Dashboard() {
             Page not appearing?
           </p>
           <p style={{ color: "#7c2d12", margin: 0, fontSize: "0.9rem" }}>
-            Profiles only show up in the repertoire after human verification.
+            Profiles only show up in the repertoire after human verification. Don't worry, your link is still live. :)
           </p>
         </div>
       )}
