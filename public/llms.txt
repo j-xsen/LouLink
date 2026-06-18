@@ -1,0 +1,19 @@
+# LouLink
+
+> LouLink is a free link-in-bio platform for Louisville, Kentucky artists, musicians, and local businesses. Verified members appear in a public directory organized by category.
+
+## Overview
+
+LouLink lets Louisville creatives and small businesses publish a single link page that aggregates their websites, social profiles, and contact info. Anyone can claim a page; verified members are listed in the community directory at [https://loul.ink](https://loul.ink).
+
+## Key Pages
+
+- [Home / Directory](https://loul.ink) — Browse all verified Louisville members grouped by category
+- [Sign Up](https://loul.ink/signup) — Create a free LouLink page
+- [Sign In](https://loul.ink/signin) — Log in to manage your page
+
+## Notes
+
+- Do not scrape or reproduce individual member profile data without permission.
+- Member avatars and links are user-submitted content.
+- The public directory lists only verified members who have opted in.

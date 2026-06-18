@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /avatars/
+Disallow: /settings
+Disallow: /analytics
+Disallow: /admin
+

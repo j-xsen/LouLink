@@ -4,12 +4,17 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import { readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
-// Inline the app CSS into the HTML to remove the separate render-blocking stylesheet request.
+// Post-build HTML patches for the client bundle.
 // Uses closeBundle (file-system pass) because @cloudflare/vite-plugin writes HTML outside the
 // normal Rollup bundle object, so generateBundle/transformIndexHtml don't see the HTML entry.
-function inlineCssPlugin(): Plugin {
+//
+// Patches applied:
+//  1. Inline the extracted CSS — eliminates the render-blocking <link rel="stylesheet"> request.
+//  2. Inject <link rel="preload" as="image"> for the hashed LCP logo SVG — makes it discoverable
+//     from the initial HTML rather than requiring JS to execute first.
+function htmlPatchPlugin(): Plugin {
   return {
-    name: "inline-css",
+    name: "html-patch",
     apply: "build",
     closeBundle() {
       const clientDir = "dist/client";
@@ -18,30 +23,49 @@ function inlineCssPlugin(): Plugin {
 
       let cssFile: string | null = null;
       let css = "";
+      let logoHref: string | null = null;
+
       try {
         for (const file of readdirSync(assetsDir)) {
           if (file.endsWith(".css")) {
             cssFile = join(assetsDir, file);
             css = readFileSync(cssFile, "utf-8");
-            break;
+          }
+          if (file.startsWith("logo-full-color") && file.endsWith(".svg")) {
+            logoHref = `/assets/${file}`;
           }
         }
       } catch { return; }
-      if (!css || !cssFile) return;
 
       try {
         let html = readFileSync(htmlPath, "utf-8");
-        html = html.replace(/<link\b[^>]*\brel="stylesheet"[^>]*>/g, (tag) =>
-          tag.includes(".css") ? "" : tag
-        );
-        html = html.replace("</head>", `<style>${css}</style></head>`);
+
+        // 1. Remove the <link rel="stylesheet"> and inline CSS
+        if (css && cssFile) {
+          html = html.replace(/<link\b[^>]*\brel="stylesheet"[^>]*>/g, (tag) =>
+            tag.includes(".css") ? "" : tag
+          );
+        }
+
+        // 2. Build the injection block: preload + inline style
+        let injection = "";
+        if (logoHref) {
+          injection += `<link rel="preload" as="image" href="${logoHref}" fetchpriority="high">`;
+        }
+        if (css) {
+          injection += `<style>${css}</style>`;
+        }
+        if (injection) {
+          html = html.replace("</head>", `${injection}</head>`);
+        }
+
         writeFileSync(htmlPath, html);
-        unlinkSync(cssFile);
+        if (cssFile) unlinkSync(cssFile);
       } catch { return; }
     },
   };
 }
 
 export default defineConfig({
-	plugins: [react(), cloudflare(), inlineCssPlugin()],
+	plugins: [react(), cloudflare(), htmlPatchPlugin()],
 });

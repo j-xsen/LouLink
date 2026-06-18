@@ -27,8 +27,10 @@ function ScrollToTop() {
 
 function IndexRoute() {
   const { loading, session, profile } = useAuth();
-  if (loading) return <p>Loading…</p>;
-  if (session && profile) return <Dashboard />;
+  // Show Dashboard only once we've confirmed a logged-in session with a profile.
+  // Showing Home during the auth check lets the directory fetch fire immediately
+  // rather than waiting for auth to resolve (~500ms on cold load).
+  if (!loading && session && profile) return <Dashboard />;
   return <Home />;
 }
 
