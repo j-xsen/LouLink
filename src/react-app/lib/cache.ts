@@ -1,21 +1,24 @@
 // ---------------------------------------------------------------------------
-// In-memory API cache — survives SPA navigations, cleared on tab close
+// localStorage-backed API cache — survives page refreshes and Safari reloads
 // ---------------------------------------------------------------------------
 
-const _apiCache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
+const PREFIX = "loulink_cache_";
 
 export function getCached<T>(key: string): T | null {
-  const entry = _apiCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL) { _apiCache.delete(key); return null; }
-  return entry.data as T;
+  try {
+    const raw = localStorage.getItem(PREFIX + key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(PREFIX + key); return null; }
+    return data as T;
+  } catch { return null; }
 }
 
 export function setCached(key: string, data: unknown) {
-  _apiCache.set(key, { data, ts: Date.now() });
+  try { localStorage.setItem(PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch {}
 }
 
 export function deleteCached(key: string) {
-  _apiCache.delete(key);
+  try { localStorage.removeItem(PREFIX + key); } catch {}
 }

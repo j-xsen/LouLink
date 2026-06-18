@@ -13,6 +13,7 @@ const MAX_LINK_TITLE = 100;
 const MAX_LINK_URL = 2048;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const OG_BODY_LIMIT = 512 * 1024; // 512 KB — caps external page reads in /api/og
+const OG_IMG_LIMIT = 2 * 1024 * 1024; // 2 MB — caps image proxy responses
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 function mimeToExt(mime: string): string {
@@ -499,6 +500,55 @@ app.get("/api/og", async (c) => {
 
   c.header("Cache-Control", "public, max-age=3600");
   return c.json({ ogImage });
+});
+
+// Proxy for OG images — fetches the image server-side so hotlink-protected CDNs
+// (e.g. Instagram's scontent CDN) are served from our domain instead of the browser
+// hitting them directly and receiving 403.
+app.get("/api/og-img", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  const { success } = await c.env.OG_RATE_LIMITER.limit({ key: ip });
+  if (!success) return new Response("Too many requests", { status: 429 });
+  const url = sanitizeUrl(c.req.query("url") ?? "");
+  if (!url) return new Response("Bad request", { status: 400 });
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; LouLink/1.0; +https://loul.ink)",
+        "Referer": new URL(url).origin + "/",
+      },
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return new Response("Not found", { status: 404 });
+
+    const contentType = res.headers.get("content-type") ?? "";
+    const mimeBase = contentType.split(";")[0].trim();
+    if (!ALLOWED_IMAGE_TYPES.has(mimeBase)) return new Response("Not an image", { status: 415 });
+
+    let imgBytes = 0;
+    const limiter = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, ctrl) {
+        imgBytes += chunk.byteLength;
+        if (imgBytes > OG_IMG_LIMIT) { ctrl.terminate(); }
+        else { ctrl.enqueue(chunk); }
+      },
+    });
+    const body = res.body?.pipeThrough(limiter) ?? null;
+    return new Response(body, {
+      headers: {
+        "Content-Type": mimeBase,
+        "Cache-Control": "public, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch {
+    return new Response("Failed to fetch image", { status: 502 });
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,38 @@ import { authClient, getJwt } from "./auth-client";
 import { clearDraft } from "./lib/draft";
 import type { SessionData, ProfileData } from "./types";
 
+// ---------------------------------------------------------------------------
+// localStorage auth snapshot — stale-while-revalidate so returning users
+// skip the loading screen entirely on page refresh
+// ---------------------------------------------------------------------------
+
+const AUTH_KEY = "loulink_auth";
+const AUTH_TTL = 5 * 60 * 1000;
+
+type AuthSnapshot = { token: string; name: string; profile: ProfileData | null };
+
+function readAuthSnapshot(): AuthSnapshot | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > AUTH_TTL) { localStorage.removeItem(AUTH_KEY); return null; }
+    return data as AuthSnapshot;
+  } catch { return null; }
+}
+
+function writeAuthSnapshot(token: string, name: string, profile: ProfileData | null) {
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify({ data: { token, name, profile }, ts: Date.now() })); } catch {}
+}
+
+function clearAuthSnapshot() {
+  try { localStorage.removeItem(AUTH_KEY); } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
+
 type AuthContextType = {
   loading: boolean;
   session: SessionData | null;
@@ -25,14 +57,18 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<SessionData | null>(null);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const snap = readAuthSnapshot();
+  const [loading, setLoading] = useState(!snap);
+  const [session, setSession] = useState<SessionData | null>(
+    snap ? { token: snap.token, name: snap.name } : null
+  );
+  const [profile, setProfile] = useState<ProfileData | null>(snap?.profile ?? null);
 
   const loadSession = useCallback(async () => {
     try {
       const { data } = await authClient.getSession();
       if (!data?.session) {
+        clearAuthSnapshot();
         setSession(null);
         setProfile(null);
         setLoading(false);
@@ -40,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const jwt = await getJwt();
       if (!jwt) {
+        clearAuthSnapshot();
         setSession(null);
         setProfile(null);
         setLoading(false);
@@ -55,12 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           headers: { Authorization: `Bearer ${s.token}` },
         });
         const d = await res.json();
-        setProfile(d.profile ?? null);
+        const p = d.profile ?? null;
+        setProfile(p);
+        writeAuthSnapshot(jwt, s.name, p);
       } catch {
         setProfile(null);
       }
       setLoading(false);
     } catch {
+      clearAuthSnapshot();
       setSession(null);
       setProfile(null);
       setLoading(false);
@@ -70,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await authClient.signOut();
     clearDraft();
+    clearAuthSnapshot();
     setSession(null);
     setProfile(null);
   }, []);

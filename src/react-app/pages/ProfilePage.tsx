@@ -423,9 +423,9 @@ export default function ProfilePage() {
                   >
                     {ogStatus && (
                       <img
-                        src={ogStatus}
+                        src={`/api/og-img?url=${encodeURIComponent(ogStatus)}`}
                         alt=""
-                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        onError={() => { setOgImages((prev) => ({ ...prev, [item.url]: null })); }}
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                       />
                     )}
