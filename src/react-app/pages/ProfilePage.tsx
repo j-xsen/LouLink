@@ -953,7 +953,7 @@ export default function ProfilePage() {
                 disabled={!isDirty || themeSaving}
                 style={{
                   background: isDirty ? theme.label : `${theme.label}35`,
-                  color: isDirty ? autoTextColor(theme.label) : theme.cardText,
+                  color: isDirty ? autoTextColor(theme.label) : `${theme.label}99`,
                   border: "none", borderRadius: 20, padding: "0.45rem 1.25rem",
                   fontSize: "0.9rem", fontWeight: 700, cursor: isDirty ? "pointer" : "default",
                   opacity: themeSaving ? 0.6 : 1,
