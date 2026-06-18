@@ -21,6 +21,13 @@
 			"bucket_name": "loulink-avatars"
 		}
 	],
+	"kv_namespaces": [
+		{
+			"binding": "UNAVATAR_CACHE",
+			"id": "61a06db836f24a78a69d0b6b86d86578",
+			"preview_id": "4a1959978ad243e3b8b97f596a1c43b7"
+		}
+	],
 	"triggers": {
 		"crons": ["0 6 * * *"]
 	},

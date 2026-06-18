@@ -18,6 +18,7 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const OG_BODY_LIMIT = 512 * 1024; // 512 KB — caps external page reads in /api/og
 const OG_IMG_LIMIT = 2 * 1024 * 1024; // 2 MB — caps image proxy responses
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const UNAVATAR_DAILY_CAP = 40; // hard stop below the 50/day plan limit
 
 function mimeToExt(mime: string): string {
   return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mime] ?? "bin";
@@ -605,10 +606,20 @@ app.get("/api/og-img", async (c) => {
   const cached = await caches.default.match(cacheKey);
   if (cached) return new Response(cached.body, { status: cached.status, headers: new Headers(cached.headers) });
 
+  const isUnavatar = new URL(url).hostname === "unavatar.io";
+  if (isUnavatar) {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const [isMiss, countStr] = await Promise.all([
+      c.env.UNAVATAR_CACHE.get(`miss:${url}`),
+      c.env.UNAVATAR_CACHE.get(`count:${dayKey}`),
+    ]);
+    if (isMiss !== null) return new Response("Not found", { status: 404 });
+    if (parseInt(countStr ?? "0", 10) >= UNAVATAR_DAILY_CAP) return new Response("Not found", { status: 429 });
+  }
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    const isUnavatar = new URL(url).hostname === "unavatar.io";
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -629,6 +640,7 @@ app.get("/api/og-img", async (c) => {
     if (isUnavatar && mimeBase !== "image/jpeg") {
       const miss = new Response("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=3600" } });
       caches.default.put(cacheKey, miss.clone()).catch(() => {});
+      c.executionCtx.waitUntil(c.env.UNAVATAR_CACHE.put(`miss:${url}`, "1", { expirationTtl: 604800 }));
       return miss;
     }
 
@@ -650,6 +662,14 @@ app.get("/api/og-img", async (c) => {
       },
     });
     caches.default.put(cacheKey, imageRes.clone()).catch(() => {});
+    if (isUnavatar) {
+      c.executionCtx.waitUntil((async () => {
+        const dayKey = new Date().toISOString().slice(0, 10);
+        const prev = await c.env.UNAVATAR_CACHE.get(`count:${dayKey}`);
+        const next = parseInt(prev ?? "0", 10) + 1;
+        await c.env.UNAVATAR_CACHE.put(`count:${dayKey}`, String(next), { expirationTtl: 172800 });
+      })());
+    }
     return imageRes;
   } catch {
     return new Response("Failed to fetch image", { status: 502 });
