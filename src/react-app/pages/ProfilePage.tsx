@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useRef, useState } from "react";
-import { Settings, BarChart2, Pencil } from "lucide-react";
+import { Settings, BarChart2, Pencil, Camera } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -93,6 +93,16 @@ export default function ProfilePage() {
   const [themeSaving, setThemeSaving] = useState(false);
   const [themeSaved, setThemeSaved] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Inline display name editing
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+
+  // Avatar upload
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarHover, setAvatarHover] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const seoTitle = profile
     ? (profile.categories.length > 0
@@ -274,6 +284,43 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleSaveName() {
+    if (!session || !profile || nameSaving) return;
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed.length > 100) return;
+    setNameSaving(true);
+    const res = await fetch("/api/me/display-name", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify({ display_name: trimmed }),
+    });
+    setNameSaving(false);
+    if (res.ok) {
+      setProfile((p) => p ? { ...p, display_name: trimmed } : p);
+      deleteCached(cacheKey);
+      setEditingName(false);
+    }
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !session || !profile) return;
+    setAvatarUploading(true);
+    const buf = await file.arrayBuffer();
+    const res = await fetch("/api/me/avatar", {
+      method: "POST",
+      headers: { "Content-Type": file.type, Authorization: `Bearer ${session.token}` },
+      body: buf,
+    });
+    setAvatarUploading(false);
+    e.target.value = "";
+    if (res.ok) {
+      const d = await res.json() as { avatarUrl: string };
+      setProfile((p) => p ? { ...p, avatarUrl: d.avatarUrl } : p);
+      deleteCached(cacheKey);
+    }
+  }
+
   function handleLinkClick(linkId: string | undefined) {
     if (isOwner || !linkId) return;
     const body = JSON.stringify({ linkId, referrer: document.referrer || null });
@@ -302,10 +349,52 @@ export default function ProfilePage() {
     <div style={{ paddingBottom: isOwner ? "8rem" : "4rem", color: theme.text, "--accent": theme.label } as React.CSSProperties & { "--accent": string }}>
       {/* Profile header */}
       <div style={{ textAlign: "center", padding: "2rem 0 1.75rem" }}>
-        {profile.avatarUrl && (
+        {(profile.avatarUrl || isOwner) && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-            <div style={{ position: "relative", display: "inline-block" }}>
-              <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+            <div
+              style={{ position: "relative", display: "inline-block", cursor: isOwner ? "pointer" : "default" }}
+              onMouseEnter={() => isOwner && setAvatarHover(true)}
+              onMouseLeave={() => setAvatarHover(false)}
+              onClick={() => isOwner && avatarInputRef.current?.click()}
+            >
+              {profile.avatarUrl ? (
+                <AvatarImage src={profile.avatarUrl} size={80} alt={profile.display_name} shape={pendingShape} />
+              ) : (
+                <div style={{
+                  width: 80, height: 80, borderRadius: "50%",
+                  border: `2px dashed ${theme.label}60`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: `${theme.label}80`,
+                }} />
+              )}
+              {isOwner && (
+                <>
+                  {/* Hover overlay for desktop */}
+                  <div style={{
+                    position: "absolute", inset: 0, borderRadius: "50%",
+                    background: "#00000055",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    opacity: (avatarHover || avatarUploading) ? 1 : 0,
+                    transition: "opacity 150ms",
+                    pointerEvents: "none",
+                  }}>
+                    {avatarUploading && <span style={{ color: "#fff", fontSize: "0.65rem" }}>…</span>}
+                  </div>
+                  {/* Always-visible camera badge for mobile */}
+                  {!avatarUploading && (
+                    <span title="Change photo" style={{
+                      position: "absolute", bottom: 2, left: 2,
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: theme.card, color: theme.label,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: `0 0 0 2px ${theme.bg}`,
+                      pointerEvents: "none",
+                    }}>
+                      <Camera size={12} />
+                    </span>
+                  )}
+                </>
+              )}
               {profile.verified && (
                 <span title="Verified Louisville" style={{
                   position: "absolute", bottom: 2, right: 2,
@@ -316,12 +405,55 @@ export default function ProfilePage() {
                   boxShadow: `0 0 0 2px ${theme.bg}`,
                 }}>✓</span>
               )}
+              {isOwner && (
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  style={{ display: "none" }}
+                  onChange={handleAvatarChange}
+                />
+              )}
             </div>
           </div>
         )}
-        <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text }}>
-          {profile.display_name}
-        </h1>
+        {isOwner && editingName ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", margin: "0.1rem 0" }}>
+            <input
+              autoFocus
+              value={nameValue}
+              maxLength={100}
+              onChange={(e) => setNameValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") setEditingName(false); }}
+              style={{
+                fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.01em",
+                color: theme.text, background: `${theme.card}cc`,
+                border: `1.5px solid ${theme.label}50`, borderRadius: 8,
+                padding: "0.2rem 0.5rem", textAlign: "center", width: "min(260px, 80vw)",
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSaveName}
+              disabled={nameSaving}
+              style={{ background: "none", border: "none", cursor: "pointer", color: theme.label, fontSize: "1.1rem", padding: "2px 4px" }}
+            >✓</button>
+            <button
+              type="button"
+              onClick={() => setEditingName(false)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: theme.text, opacity: 0.4, fontSize: "1rem", padding: "2px 4px" }}
+            >✕</button>
+          </div>
+        ) : (
+          <h1
+            style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.01em", color: theme.text, cursor: isOwner ? "text" : "default", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+            onClick={() => { if (isOwner) { setNameValue(profile.display_name); setEditingName(true); } }}
+          >
+            {profile.display_name}
+            {isOwner && <Pencil size={16} style={{ opacity: 0.35, flexShrink: 0 }} />}
+          </h1>
+        )}
         {profile.bio && (
           <p style={{ color: theme.text, opacity: 0.65, margin: "0.5rem 0 0", fontSize: "0.95rem", lineHeight: 1.5 }}>
             {profile.bio}
@@ -519,13 +651,11 @@ export default function ProfilePage() {
       {/* Owner theme toolbar */}
       {isOwner && paletteOpen && (
         <div style={{
-          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-          width: "100%", maxWidth: 600,
+          position: "fixed", bottom: 0, left: 0, right: 0,
           background: `${theme.card}f0`,
           backdropFilter: "blur(12px)",
           borderTop: `1px solid ${theme.label}30`,
           padding: "0.6rem 1rem",
-          display: "flex", flexDirection: "column", gap: "0.5rem",
           zIndex: 100,
           boxSizing: "border-box",
         }}>
@@ -542,6 +672,7 @@ export default function ProfilePage() {
             }}
           >✕</button>
 
+          <div className="palette-inner">
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Theme</span>
 
@@ -615,6 +746,7 @@ export default function ProfilePage() {
 
           </div>
 
+          <div style={{ height: 1, background: theme.cardText, opacity: 0.12 }} />
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Headers</span>
             {HEADER_COLOR_PRESETS.map(({ name, color }) => (
@@ -655,6 +787,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Card color picker */}
+          <div style={{ height: 1, background: theme.cardText, opacity: 0.12 }} />
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Cards</span>
             {/* Auto */}
@@ -769,6 +902,7 @@ export default function ProfilePage() {
           )}
 
           {/* Avatar shape picker */}
+          <div style={{ height: 1, background: theme.cardText, opacity: 0.12 }} />
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
             <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Shape</span>
             {AVATAR_SHAPES.map((s) => (
@@ -796,6 +930,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Social color toggle */}
+          <div style={{ height: 1, background: theme.cardText, opacity: 0.12 }} />
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: theme.cardText, opacity: 0.5, flexShrink: 0 }}>Socials colors</span>
             <button
@@ -833,6 +968,7 @@ export default function ProfilePage() {
               {themeSaving ? "…" : "Save"}
             </button>
           </div>
+          </div>{/* end palette-inner */}
         </div>
       )}
     </div>

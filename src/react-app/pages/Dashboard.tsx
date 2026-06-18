@@ -14,6 +14,7 @@ import type { DirectoryMember } from "../types";
 import logoFullColor from "../assets/logo-full-color.svg";
 const shape1 = "/shapes/shape-1.svg";
 const shape2 = "/shapes/shape-2.svg";
+const shape3 = "/shapes/shape-3.svg";
 
 export default function Dashboard() {
   const { profile, signOut } = useAuth();
@@ -55,6 +56,9 @@ export default function Dashboard() {
       <div style={{ display: "flex", gap: "0.25rem", marginTop: "2rem", marginBottom: "0.75rem", alignItems: "center" }}>
         <ShapeButton to="/create" shape={shape2} style={{ flex: 1 }}>Edit links</ShapeButton>
         <ShapeButton to={`/${profile.username}`} shape={shape1} style={{ flex: 1 }}>My page</ShapeButton>
+        <span className="analytics-btn">
+          <ShapeButton to="/analytics" shape={shape3} style={{ flex: 1 }}>Analytics</ShapeButton>
+        </span>
         <div ref={menuRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             type="button"
@@ -79,6 +83,7 @@ export default function Dashboard() {
             }}>
               <Link
                 to="/analytics"
+                className="analytics-menu-item"
                 style={{ display: "block", padding: "0.65rem 1rem", textDecoration: "none", color: "inherit", fontSize: "0.9rem" }}
                 onClick={() => setMenuOpen(false)}
               >
