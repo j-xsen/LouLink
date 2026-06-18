@@ -420,7 +420,7 @@ app.get("/api/profile/:username", async (c) => {
 
   const body = JSON.stringify({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
   const res = new Response(body, {
-    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0", "CDN-Cache-Control": "no-store" },
   });
   await caches.default.put(cacheKey, res.clone());
   return res;
@@ -664,7 +664,7 @@ app.get("/api/directory", async (c) => {
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
   }));
   const res = new Response(JSON.stringify(members), {
-    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0", "CDN-Cache-Control": "no-store" },
   });
   await caches.default.put(cacheKey, res.clone());
   return res;
