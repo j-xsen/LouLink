@@ -8,6 +8,9 @@ import { handleScheduled } from "./cron";
 const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_DISPLAY_NAME = 100;
+const RESERVED_USERNAMES = new Set([
+  "api", "avatars", "signin", "signup", "create", "settings", "analytics", "admin",
+]);
 const MAX_LINKS = 50;
 const MAX_LINK_TITLE = 100;
 const MAX_LINK_URL = 2048;
@@ -122,6 +125,9 @@ app.post("/api/onboarding", requireAuth, async (c) => {
 
   if (!USERNAME_RE.test(username)) {
     return c.json({ error: "Invalid username" }, 400);
+  }
+  if (RESERVED_USERNAMES.has(username)) {
+    return c.json({ error: "Username is reserved" }, 400);
   }
   if (!display_name || display_name.length > MAX_DISPLAY_NAME) {
     return c.json({ error: "Display name is required (max 100 characters)" }, 400);
@@ -320,6 +326,9 @@ app.put("/api/me/username", requireAuth, async (c) => {
   if (!USERNAME_RE.test(username)) {
     return c.json({ error: "Invalid username" }, 400);
   }
+  if (RESERVED_USERNAMES.has(username)) {
+    return c.json({ error: "Username is reserved" }, 400);
+  }
 
   const sql = createDb(c.env.DATABASE_URL);
   const [oldRow] = await sql`SELECT username FROM public.profiles WHERE user_id = ${userId}`;
@@ -403,6 +412,7 @@ app.get("/api/username/:username/available", async (c) => {
   if (!success) return c.json({ error: "Too many requests" }, 429);
   const username = c.req.param("username").toLowerCase();
   if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
+  if (RESERVED_USERNAMES.has(username)) return c.json({ available: false, reason: "reserved" });
 
   const sql = createDb(c.env.DATABASE_URL);
   const [row] = await sql`SELECT 1 FROM public.profiles WHERE username = ${username} LIMIT 1`;
