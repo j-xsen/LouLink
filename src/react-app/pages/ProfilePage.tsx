@@ -9,7 +9,7 @@ import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { adaptTextColor, autoTextColor, generateCardPalette } from "../lib/color";
 import { Icon, BRAND_COLORS } from "../components/icons";
-import { AvatarImage, AvatarOverlay } from "../components/Avatar";
+import { AvatarImage, AvatarOverlay, resizeAndEncode } from "../components/Avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
 import { AVATAR_BLOB_SHAPES } from "../components/ui";
 import { useAuth } from "../auth";
@@ -306,11 +306,12 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !session || !profile) return;
     setAvatarUploading(true);
-    const buf = await file.arrayBuffer();
+    const { blob, mimeType, dataUrl } = await resizeAndEncode(file);
+    setProfile((p) => p ? { ...p, avatarUrl: dataUrl } : p);
     const res = await fetch("/api/me/avatar", {
       method: "POST",
-      headers: { "Content-Type": file.type, Authorization: `Bearer ${session.token}` },
-      body: buf,
+      headers: { "Content-Type": mimeType, Authorization: `Bearer ${session.token}` },
+      body: blob,
     });
     setAvatarUploading(false);
     e.target.value = "";
@@ -318,6 +319,8 @@ export default function ProfilePage() {
       const d = await res.json() as { avatarUrl: string };
       setProfile((p) => p ? { ...p, avatarUrl: d.avatarUrl } : p);
       deleteCached(cacheKey);
+    } else {
+      setProfile((p) => p ? { ...p, avatarUrl: profile.avatarUrl } : p);
     }
   }
 

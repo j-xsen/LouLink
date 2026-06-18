@@ -12,7 +12,7 @@ import { useSeo } from "../lib/seo";
 import { autoTextColor, extractDominantColor, generateCardPalette } from "../lib/color";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
-import { AvatarImage } from "../components/Avatar";
+import { AvatarImage, resizeAndEncode } from "../components/Avatar";
 import { CATEGORY_HIERARCHY, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
 
 const GROUP_COLORS: Record<string, string> = {
@@ -257,13 +257,20 @@ export default function Settings() {
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                const { blob, mimeType, dataUrl } = await resizeAndEncode(file);
+                setAvatarUrl(dataUrl);
                 const res = await fetch("/api/me/avatar", {
                   method: "POST",
-                  headers: { "Content-Type": file.type, Authorization: `Bearer ${session.token}` },
-                  body: file,
+                  headers: { "Content-Type": mimeType, Authorization: `Bearer ${session.token}` },
+                  body: blob,
                 });
                 const d = await res.json();
-                if (res.ok) { setAvatarUrl(d.avatarUrl); deleteCached(`/api/profile/${profile.username}`); }
+                if (res.ok) {
+                  setAvatarUrl(d.avatarUrl);
+                  deleteCached(`/api/profile/${profile.username}`);
+                } else {
+                  setAvatarUrl(profile.avatarUrl ?? null);
+                }
                 e.target.value = "";
               }}
             />

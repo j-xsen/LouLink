@@ -17,16 +17,16 @@ const MAX_LINK_URL = 2048;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const OG_BODY_LIMIT = 512 * 1024; // 512 KB — caps external page reads in /api/og
 const OG_IMG_LIMIT = 2 * 1024 * 1024; // 2 MB — caps image proxy responses
-const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
 const UNAVATAR_DAILY_CAP = 40; // hard stop below the 50/day plan limit
 
 function mimeToExt(mime: string): string {
-  return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" } as Record<string, string>)[mime] ?? "bin";
+  return ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" } as Record<string, string>)[mime] ?? "bin";
 }
 
-function avatarUrl(assetId: string | null): string | null {
+function avatarUrl(assetId: string | null, origin: string): string | null {
   if (!assetId) return null;
-  return `https://loul.ink/avatars/${assetId}`;
+  return `${origin}/avatars/${assetId}`;
 }
 
 async function bustProfileCache(origin: string, username: string): Promise<void> {
@@ -105,7 +105,8 @@ app.get("/api/me", requireAuth, async (c) => {
     FROM public.profiles WHERE user_id = ${userId}
   `;
   if (!profile) return c.json({ profile: null });
-  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) } });
+  const origin = new URL(c.req.url).origin;
+  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null, origin) } });
 });
 
 app.post("/api/onboarding", requireAuth, async (c) => {
@@ -374,7 +375,10 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
     (mimeType === "image/png"  && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) ||
     (mimeType === "image/gif"  && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) ||
     (mimeType === "image/webp" && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-                                  bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50);
+                                  bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) ||
+    // AVIF: ISOBMFF ftyp box with major brand "avif" or "avis"
+    (mimeType === "image/avif" && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 &&
+                                  bytes[8] === 0x61 && bytes[9] === 0x76 && bytes[10] === 0x69 && (bytes[11] === 0x66 || bytes[11] === 0x73));
   if (!validMagic) return c.json({ error: "File content does not match declared image type" }, 415);
   const sql = createDb(c.env.DATABASE_URL);
   const [existing] = await sql`SELECT username, avatar_asset_id FROM public.profiles WHERE user_id = ${userId}`;
@@ -387,8 +391,9 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (oldKey && oldKey !== newKey) {
     await c.env.AVATAR_BUCKET.delete(oldKey);
   }
-  await bustProfileCache(new URL(c.req.url).origin, existing.username as string);
-  return c.json({ avatarUrl: avatarUrl(newKey) });
+  const origin = new URL(c.req.url).origin;
+  await bustProfileCache(origin, existing.username as string);
+  return c.json({ avatarUrl: avatarUrl(newKey, origin) });
 });
 
 app.put("/api/me/directory-visibility", requireAuth, async (c) => {
@@ -403,8 +408,9 @@ app.put("/api/me/directory-visibility", requireAuth, async (c) => {
     RETURNING username, display_name, bio, categories, verified, hide_from_directory, avatar_asset_id, social_links, accent_color
   `;
   if (!profile) return c.json({ error: "Not allowed" }, 403);
-  await bustProfileCache(new URL(c.req.url).origin, profile.username as string);
-  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) } });
+  const origin = new URL(c.req.url).origin;
+  await bustProfileCache(origin, profile.username as string);
+  return c.json({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null, origin) } });
 });
 
 app.get("/api/username/:username/available", async (c) => {
@@ -447,7 +453,8 @@ app.get("/api/profile/:username", async (c) => {
     ORDER BY sort_order ASC
   `;
 
-  const body = JSON.stringify({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null) }, links });
+  const origin = new URL(c.req.url).origin;
+  const body = JSON.stringify({ profile: { ...profile, avatarUrl: avatarUrl(profile.avatar_asset_id as string | null, origin) }, links });
   const res = new Response(body, {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0", "CDN-Cache-Control": "no-store" },
   });
@@ -784,9 +791,10 @@ app.get("/api/directory", async (c) => {
     WHERE verified = true AND hide_from_directory IS NOT TRUE
     ORDER BY display_name
   `;
+  const origin = new URL(c.req.url).origin;
   const members = rows.map((p) => ({
     ...p,
-    avatarUrl: avatarUrl(p.avatar_asset_id as string | null),
+    avatarUrl: avatarUrl(p.avatar_asset_id as string | null, origin),
   }));
   const res = new Response(JSON.stringify(members), {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0", "CDN-Cache-Control": "no-store" },

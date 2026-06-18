@@ -9,6 +9,34 @@ import type { AvatarShape } from "../types";
 export const ALLOWED_IMAGE_TYPES_CLIENT = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 export const MAX_AVATAR_BYTES_CLIENT = 5 * 1024 * 1024;
 
+const AVATAR_MAX_PX = 400;
+
+export async function resizeAndEncode(file: File): Promise<{ blob: Blob; mimeType: string; dataUrl: string }> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const scale = Math.min(AVATAR_MAX_PX / side, 1);
+  const dim = Math.round(side * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = dim;
+  canvas.height = dim;
+  const ctx = canvas.getContext("2d")!;
+  const ox = (bitmap.width - side) / 2;
+  const oy = (bitmap.height - side) / 2;
+  ctx.drawImage(bitmap, ox, oy, side, side, 0, 0, dim, dim);
+  bitmap.close();
+  // Try AVIF first, fall back to WebP
+  for (const [type, quality] of [["image/avif", 0.75], ["image/webp", 0.82]] as const) {
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, type, quality));
+    if (blob && blob.type === type) {
+      const dataUrl = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(blob); });
+      return { blob, mimeType: type, dataUrl };
+    }
+  }
+  // Last resort: upload the original file unchanged
+  const dataUrl = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(file); });
+  return { blob: file, mimeType: file.type, dataUrl };
+}
+
 export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "circle" }: { src: string | null; size?: number; alt?: string; shape?: AvatarShape }) {
   const uid = useId().replace(/:/g, "");
   if (!src) return null;
@@ -28,7 +56,7 @@ export function AvatarImage({ src, size = 64, alt = "Profile picture", shape = "
     );
   }
   return (
-    <img src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+    <img key={src} src={src} alt={alt} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "block" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
   );
 }
 
@@ -98,10 +126,11 @@ export function AvatarUpload({
     setPreview(objectUrl);
     setUploading(true);
     try {
+      const { blob, mimeType } = await resizeAndEncode(file);
       const res = await fetch("/api/me/avatar", {
         method: "POST",
-        headers: { "Content-Type": file.type, Authorization: `Bearer ${token}` },
-        body: file,
+        headers: { "Content-Type": mimeType, Authorization: `Bearer ${token}` },
+        body: blob,
       });
       const d = await res.json();
       if (!res.ok) {

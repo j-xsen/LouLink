@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { createBrowserRouter, Outlet, RouterProvider, useLocation } from "react-router-dom";
 import { AuthProvider, RedirectIfAuthed, RequireProfile, useAuth } from "./auth";
 import Home from "./pages/Home";
 import CreatePage from "./pages/CreatePage";
@@ -33,27 +33,40 @@ function IndexRoute() {
 }
 
 // ---------------------------------------------------------------------------
-// App root
+// Root layout — provides auth context and shared chrome
 // ---------------------------------------------------------------------------
 
-export default function App() {
+function Root() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ScrollToTop />
-        <main>
-        <Routes>
-          <Route path="/" element={<IndexRoute />} />
-          <Route path="/signin" element={<RedirectIfAuthed><SignIn /></RedirectIfAuthed>} />
-          <Route path="/signup" element={<RedirectIfAuthed><SignUp /></RedirectIfAuthed>} />
-          <Route path="/create" element={<CreatePage />} />
-          <Route path="/settings" element={<RequireProfile><Settings /></RequireProfile>} />
-          <Route path="/analytics" element={<RequireProfile><Analytics /></RequireProfile>} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/:username" element={<ProfilePage />} />
-        </Routes>
-        </main>
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <ScrollToTop />
+      <main>
+        <Outlet />
+      </main>
+    </AuthProvider>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
+
+const router = createBrowserRouter([
+  {
+    element: <Root />,
+    children: [
+      { path: "/", element: <IndexRoute /> },
+      { path: "/signin", element: <RedirectIfAuthed><SignIn /></RedirectIfAuthed> },
+      { path: "/signup", element: <RedirectIfAuthed><SignUp /></RedirectIfAuthed> },
+      { path: "/create", element: <CreatePage /> },
+      { path: "/settings", element: <RequireProfile><Settings /></RequireProfile> },
+      { path: "/analytics", element: <RequireProfile><Analytics /></RequireProfile> },
+      { path: "/admin", element: <AdminDashboard /> },
+      { path: "/:username", element: <ProfilePage /> },
+    ],
+  },
+]);
+
+export default function App() {
+  return <RouterProvider router={router} />;
 }
