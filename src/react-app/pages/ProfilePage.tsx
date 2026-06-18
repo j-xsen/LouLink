@@ -946,27 +946,27 @@ export default function ProfilePage() {
             >
               <div style={{ width: 18, height: 18, borderRadius: "50%", background: !pendingMono ? theme.label : `${theme.cardText}40`, transition: "background 150ms" }} />
             </button>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "0.5rem" }}>
-            {themeSaved && (
-              <span style={{ fontSize: "0.75rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveTheme}
-              disabled={!isDirty || themeSaving}
-              style={{
-                background: theme.bg,
-                color: theme.text,
-                border: "none", borderRadius: 20, padding: "0.3rem 0.9rem",
-                fontSize: "0.75rem", fontWeight: 700, cursor: isDirty ? "pointer" : "default",
-                opacity: themeSaving ? 0.5 : isDirty ? 1 : 0.25,
-                transition: "opacity 200ms",
-              }}
-            >
-              {themeSaving ? "…" : "Save"}
-            </button>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {themeSaved && (
+                <span style={{ fontSize: "0.8rem", color: theme.label, fontWeight: 600 }}>Saved!</span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveTheme}
+                disabled={!isDirty || themeSaving}
+                style={{
+                  background: isDirty ? theme.label : `${theme.label}35`,
+                  color: isDirty ? autoTextColor(theme.label) : theme.cardText,
+                  border: "none", borderRadius: 20, padding: "0.45rem 1.25rem",
+                  fontSize: "0.9rem", fontWeight: 700, cursor: isDirty ? "pointer" : "default",
+                  opacity: themeSaving ? 0.6 : 1,
+                  boxShadow: isDirty ? "0 2px 6px rgba(0,0,0,0.18)" : "none",
+                  transition: "background 200ms, color 200ms, box-shadow 200ms",
+                }}
+              >
+                {themeSaving ? "…" : "Save"}
+              </button>
+            </div>
           </div>
           </div>{/* end palette-inner */}
         </div>

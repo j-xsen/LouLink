@@ -93,6 +93,18 @@ textarea:focus {
   width: 100%;
 }
 
+@media (min-width: 800px) {
+  .palette-inner {
+    zoom: 1.25;
+  }
+}
+
+@media (min-width: 1100px) {
+  .palette-inner {
+    zoom: 1.45;
+  }
+}
+
 .analytics-btn {
   display: none;
 }

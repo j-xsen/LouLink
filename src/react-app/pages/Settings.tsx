@@ -3,6 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Link as LinkIcon } from "lucide-react";
 import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -219,7 +221,12 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader />
+      <PageHeader right={
+        <Link to="/create" style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#12080b", padding: 6, textDecoration: "none", fontSize: "0.875rem", fontWeight: 700, opacity: 1 }}>
+          <LinkIcon size={16} strokeWidth={2.5} />
+          Links
+        </Link>
+      } />
       <ShapeTitle>Settings</ShapeTitle>
 
       {/* Profile picture */}

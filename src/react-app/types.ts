@@ -53,7 +53,7 @@ export const THEME_NAMES: Record<string, string> = {
   terminal: "Terminal",
 };
 
-export const AVATAR_SHAPES = ["circle", "1", "5", "6", "7"] as const;
+export const AVATAR_SHAPES = ["circle", "1", "5", "6"] as const;
 export type AvatarShape = typeof AVATAR_SHAPES[number];
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;

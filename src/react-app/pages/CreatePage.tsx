@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { getDraft, saveDraft, clearDraft } from "../lib/draft";
@@ -286,7 +287,12 @@ export default function CreatePage() {
 
   return (
     <>
-      <PageHeader />
+      <PageHeader right={profile && (
+        <Link to="/settings" style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#12080b", padding: 6, textDecoration: "none", fontSize: "0.875rem", fontWeight: 700, opacity: 1 }}>
+          <SettingsIcon size={16} strokeWidth={2.5} />
+          Settings
+        </Link>
+      )} />
       <div id="link-list" style={{ position: "relative", top: "-1rem" }} aria-hidden />
       <ShapeTitle>{profile ? "Edit your links" : "Build your page"}</ShapeTitle>
       {!profile && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: "0.9rem" }}>Add your links below. You can create an account when you're ready to save.</p>}

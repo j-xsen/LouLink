@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useId } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import logoFullColor from "../assets/logo-full-color.svg";
 const shape2 = "/shapes/shape-2.svg";
@@ -82,25 +82,25 @@ export function ShapeButton({
 // PageHeader — back arrow + centered logo (shared across inner pages)
 // ---------------------------------------------------------------------------
 
-export function PageHeader() {
-  const navigate = useNavigate();
+export function PageHeader({ right }: { right?: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", padding: "0.5rem 0 0" }}>
       <div style={{ position: "relative", display: "inline-flex", alignItems: "center", height: 44, flexShrink: 0 }}>
         <img src={shape4} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: "left center", pointerEvents: "none", transform: "translateX(-5px)" }} />
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          aria-label="Go back"
-          style={{ position: "relative", zIndex: 1, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", color: "#12080b", padding: "0 1.5rem 0 0.55rem" }}
+        <Link
+          to="/"
+          aria-label="Go home"
+          style={{ position: "relative", zIndex: 1, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", color: "#12080b", padding: "0 1.5rem 0 0.55rem", textDecoration: "none" }}
         >
           <ArrowLeft size={26} />
-        </button>
+        </Link>
       </div>
       <div style={{ flex: 1, textAlign: "center" }}>
         <Link to="/"><img src={logoFullColor} alt="LouLink" style={{ width: "min(55%, 220px)", height: "auto" }} /></Link>
       </div>
-      <div style={{ flexShrink: 0, width: 56 }} />
+      <div style={{ flexShrink: 0, minWidth: 56, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
+        {right}
+      </div>
     </div>
   );
 }
