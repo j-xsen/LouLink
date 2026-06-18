@@ -28,10 +28,28 @@ export default function Home() {
   });
 
   useEffect(() => {
-    fetch("/api/directory", { credentials: "omit" })
-      .then((r) => r.json())
-      .then((data) => { setCached("/api/directory", data); setMembers(data as DirectoryMember[]); setStatus("ready"); })
-      .catch(() => setStatus("error"));
+    let cancelled = false;
+    const load = (attempt = 0) => {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      fetch("/api/directory", { credentials: "omit", signal: controller.signal })
+        .then((r) => r.json())
+        .then((data) => {
+          clearTimeout(t);
+          if (cancelled) return;
+          setCached("/api/directory", data);
+          setMembers(data as DirectoryMember[]);
+          setStatus("ready");
+        })
+        .catch(() => {
+          clearTimeout(t);
+          if (cancelled) return;
+          if (attempt === 0) setTimeout(() => load(1), 1000);
+          else setStatus("error");
+        });
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   return (

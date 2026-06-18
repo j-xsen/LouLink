@@ -827,7 +827,7 @@ app.get("/api/directory", async (c) => {
     avatarUrl: avatarUrl(p.avatar_asset_id as string | null, origin),
   }));
   const res = new Response(JSON.stringify(members), {
-    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=0", "CDN-Cache-Control": "no-store" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, s-maxage=86400, max-age=300, stale-while-revalidate=3600", "CDN-Cache-Control": "no-store" },
   });
   await caches.default.put(cacheKey, res.clone());
   return res;
