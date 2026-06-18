@@ -30,7 +30,7 @@
 				"name": "OG_RATE_LIMITER",
 				"type": "ratelimit",
 				"namespace_id": "1001",
-				"simple": { "limit": 20, "period": 60 }
+				"simple": { "limit": 200, "period": 60 }
 			},
 			{
 				"name": "UNAUTHED_RATE_LIMITER",
