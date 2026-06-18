@@ -12,6 +12,7 @@ import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton, DragHandle } from "../components/ui";
 import { Icon, IconPicker, BRAND_COLORS } from "../components/icons";
+import { useNavigationWarning } from "../lib/useNavigationWarning";
 import type { DraftItem, DraftHeader } from "../types";
 
 export default function CreatePage() {
@@ -49,6 +50,7 @@ export default function CreatePage() {
     JSON.stringify(items) !== JSON.stringify(savedItems) ||
     JSON.stringify(socialLinks) !== JSON.stringify(savedSocialLinks)
   );
+  useNavigationWarning(hasChanges);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");

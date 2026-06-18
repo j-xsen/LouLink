@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Link as LinkIcon } from "lucide-react";
+import { useNavigationWarning } from "../lib/useNavigationWarning";
 import { useAuth } from "../auth";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
@@ -83,6 +84,15 @@ export default function Settings() {
   const isCustomAccent = accentColor !== null && !THEMES[accentColor];
   const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
   const isCustomCardText = cardTextColor !== null;
+
+  const anyDirty =
+    displayName !== (profile?.display_name ?? "") ||
+    bio !== (profile?.bio ?? "") ||
+    JSON.stringify([...categories].sort()) !== JSON.stringify([...(profile?.categories ?? [])].sort()) ||
+    accentColor !== initTheme || headerColor !== initHeader || monoSocial !== initMono ||
+    avatarShape !== initShape || cardColor !== initCardColor || cardTextColor !== initCardTextColor ||
+    username !== (profile?.username ?? "");
+  useNavigationWarning(anyDirty);
 
   async function handleVisibilityToggle(hide: boolean) {
     if (!session) return;
