@@ -389,9 +389,7 @@ export default function CreatePage() {
                       <input type="text" value={item.url} onChange={(e) => updateItem(i, { url: e.target.value })} onPaste={(e) => {
                         const pasted = e.clipboardData.getData("text");
                         const inf = inferFromUrl(pasted);
-                        const patch: Partial<DraftItem> = {};
-                        if (!item.icon && inf.icon) patch.icon = inf.icon;
-                        if (Object.keys(patch).length > 0) updateItem(i, patch);
+                        if (!item.icon && inf.icon) updateItem(i, { icon: inf.icon });
                         fetchPageTitle(pasted).then(title => {
                           const resolved = title ?? inf.title ?? null;
                           if (!resolved) return;
