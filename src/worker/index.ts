@@ -488,6 +488,8 @@ app.get("/api/og", async (c) => {
         .transform(limited)
         .arrayBuffer();
       let raw: string | null = found[0] ?? null;
+      // Decode HTML entities that appear in attribute values (e.g. &amp; → &)
+      if (raw) raw = raw.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
       // Resolve relative URLs against the final page origin
       if (raw && !raw.startsWith("http")) {
         try { raw = new URL(raw, finalUrl).href; } catch { raw = null; }
