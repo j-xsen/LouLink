@@ -97,6 +97,24 @@ function sanitizeItems(raw: unknown): SanitizedItem[] | null {
 
 app.get("/api/", (c) => c.json({ name: "LouLink" }));
 
+app.post("/api/forgot-password", async (c) => {
+  const body = await readJson<{ email?: unknown }>(c);
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!email) return c.json({ ok: true });
+
+  const origin = new URL(c.req.url).origin;
+  const res = await fetch(`${c.env.NEON_AUTH_URL}/sign-in/magic-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, callbackURL: origin }),
+  });
+  const text = await res.text();
+  console.log("[magic-link] status:", res.status, "body:", text);
+
+  return c.json({ ok: true });
+});
+
+
 app.get("/api/me", requireAuth, async (c) => {
   const userId = c.get("userId");
   const sql = createDb(c.env.DATABASE_URL);

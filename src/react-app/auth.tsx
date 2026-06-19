@@ -66,7 +66,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadSession = useCallback(async () => {
     try {
+      const rawRes = await fetch(`${import.meta.env.VITE_AUTH_URL}/get-session`, { credentials: "include" });
+      console.log("[loadSession] raw /get-session status:", rawRes.status, "ok:", rawRes.ok);
+      const rawText = await rawRes.text();
+      console.log("[loadSession] raw /get-session body:", rawText.slice(0, 300));
       const { data } = await authClient.getSession();
+      console.log("[loadSession] getSession data:", data);
       if (!data?.session) {
         clearAuthSnapshot();
         setSession(null);
@@ -75,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const jwt = await getJwt();
+      console.log("[loadSession] getJwt result:", jwt);
       if (!jwt) {
         clearAuthSnapshot();
         setSession(null);
@@ -115,7 +121,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   }, []);
 
-  useEffect(() => { loadSession(); }, [loadSession]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const verifier = params.get("neon_auth_session_verifier");
+
+    if (verifier) {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("neon_auth_session_verifier");
+      window.history.replaceState({}, "", clean.toString());
+
+      // Try passing the verifier as a query param to /get-session — Neon Auth explicitly
+      // appends neon_auth_session_verifier to the redirect and may handle it here.
+      fetch(`${import.meta.env.VITE_AUTH_URL}/get-session?neon_auth_session_verifier=${verifier}`, {
+        credentials: "include",
+      }).then(r => r.text()).then(body => {
+        console.log("[magic-link] get-session?verifier body:", body.slice(0, 300));
+        loadSession();
+      }).catch(() => loadSession());
+      return;
+    }
+
+    loadSession();
+  }, [loadSession]);
 
   return (
     <AuthContext.Provider value={{ loading, session, profile, loadSession, signOut }}>

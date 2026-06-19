@@ -13,6 +13,7 @@
 	},
 	"dependencies": {
 		"@neondatabase/serverless": "^1.1.0",
+		"bcryptjs": "^3.0.3",
 		"better-auth": "^1.6.15",
 		"hono": "4.11.1",
 		"jose": "^6.2.3",
@@ -25,6 +26,7 @@
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "1.15.3",
 		"@eslint/js": "9.39.1",
+		"@types/bcryptjs": "^3.0.0",
 		"@types/node": "24.10.1",
 		"@types/react": "19.2.7",
 		"@types/react-dom": "19.2.3",
