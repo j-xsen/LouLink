@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Forgot Password page
+// Single Sign-On Link page
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
@@ -9,7 +9,7 @@ import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
-  useSeo({ title: "Forgot Password | LouLink", noindex: true });
+  useSeo({ title: "Single Sign-On Link | LouLink", noindex: true });
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -29,7 +29,7 @@ export default function ForgotPassword() {
   return (
     <>
       <PageHeader />
-      <ShapeTitle>Sign in with a link</ShapeTitle>
+      <ShapeTitle>Single Sign-On Link</ShapeTitle>
       <div className="settings-card" style={{ marginTop: "1.5rem" }}>
         {submitted ? (
           <>
@@ -38,7 +38,7 @@ export default function ForgotPassword() {
           </>
         ) : (
           <form onSubmit={handleSubmit}>
-            <p style={{ marginTop: 0 }}>Enter your email and we'll send you a one-time link to sign in directly — no password needed.</p>
+            <p style={{ marginTop: 0 }}>Enter your email and we'll send you a single sign-on link.</p>
             <p>
               <label>
                 Email<br />

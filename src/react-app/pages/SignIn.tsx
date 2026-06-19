@@ -46,7 +46,7 @@ export default function SignIn() {
               Password<br />
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </label>
-            <button type="button" onClick={() => navigate("/forgot-password")} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", textDecoration: "underline", padding: 0, fontSize: "0.85rem", marginTop: "0.25rem", display: "block", opacity: 0.7 }}>Forgot password / sign in with a link</button>
+            <button type="button" onClick={() => navigate("/forgot-password")} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", textDecoration: "underline", padding: 0, fontSize: "0.85rem", marginTop: "0.25rem", display: "block", opacity: 0.7 }}>Single sign-on link</button>
           </p>
           {error && <p><strong>{error}</strong></p>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", marginTop: "0.5rem" }}>
