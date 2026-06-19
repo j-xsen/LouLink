@@ -159,7 +159,7 @@ export default function SignUp() {
             <>
               <p>
                 <label>
-                  Email<br />
+                  Email <button type="button" title="Only used if you need to reset your password." style={{ background: "none", border: "1px solid currentColor", borderRadius: "50%", width: "1.1em", height: "1.1em", fontSize: "0.75em", cursor: "default", padding: 0, lineHeight: 1, verticalAlign: "middle", opacity: 0.6 }}>i</button><br />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </label>
                 {email && (
