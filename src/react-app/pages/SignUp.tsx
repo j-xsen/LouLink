@@ -25,6 +25,7 @@ export default function SignUp() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const checkStatus = useUsernameCheck(username);
+  const [showEmailNote, setShowEmailNote] = useState(false);
 
   const hasSession = !!session;
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -159,9 +160,12 @@ export default function SignUp() {
             <>
               <p>
                 <label>
-                  Email <button type="button" title="Only used if you need to reset your password." style={{ background: "none", border: "1px solid currentColor", borderRadius: "50%", width: "1.1em", height: "1.1em", fontSize: "0.75em", cursor: "default", padding: 0, lineHeight: 1, verticalAlign: "middle", opacity: 0.6 }}>i</button><br />
+                  Email <button type="button" onClick={() => setShowEmailNote(n => !n)} style={{ background: "none", border: "1px solid currentColor", borderRadius: "50%", width: "1.1em", height: "1.1em", fontSize: "0.75em", cursor: "pointer", padding: 0, lineHeight: 1, verticalAlign: "middle", opacity: 0.6 }}>i</button><br />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </label>
+                {showEmailNote && (
+                  <span style={{ fontSize: "0.85rem", display: "block", marginTop: "0.25rem", opacity: 0.7 }}>Only used if you need to reset your password.</span>
+                )}
                 {email && (
                   <span style={{ fontSize: "0.85rem", display: "block", marginTop: "0.25rem" }}>
                     {emailValid ? "✓ Valid" : "✗ Invalid email"}
