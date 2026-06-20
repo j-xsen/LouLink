@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authClient } from "../auth-client";
 import { useSeo } from "../lib/seo";
 import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 
@@ -17,11 +18,7 @@ export default function ForgotPassword() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    await fetch("/api/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
+    await authClient.signIn.magicLink({ email, callbackURL: "/" });
     setSubmitted(true);
     setSubmitting(false);
   }
