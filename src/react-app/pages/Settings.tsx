@@ -85,12 +85,13 @@ export default function Settings() {
   const isCustomHeader = headerColor !== null && !HEADER_COLOR_PRESETS.some((p) => p.color === headerColor);
   const isCustomCardText = cardTextColor !== null;
 
-  const anyDirty =
-    displayName !== (profile?.display_name ?? "") ||
-    bio !== (profile?.bio ?? "") ||
-    JSON.stringify([...categories].sort()) !== JSON.stringify([...(profile?.categories ?? [])].sort()) ||
-    accentColor !== initTheme || headerColor !== initHeader || monoSocial !== initMono ||
-    avatarShape !== initShape || cardColor !== initCardColor || cardTextColor !== initCardTextColor ||
+  const displayNameDirty = displayName !== (profile?.display_name ?? "");
+  const bioDirty = bio !== (profile?.bio ?? "");
+  const categoriesDirty = JSON.stringify([...categories].sort()) !== JSON.stringify([...(profile?.categories ?? [])].sort());
+  const appearanceDirty = accentColor !== initTheme || headerColor !== initHeader || monoSocial !== initMono ||
+    avatarShape !== initShape || cardColor !== initCardColor || cardTextColor !== initCardTextColor;
+
+  const anyDirty = displayNameDirty || bioDirty || categoriesDirty || appearanceDirty ||
     username !== (profile?.username ?? "");
   useNavigationWarning(anyDirty);
 
@@ -268,6 +269,7 @@ export default function Settings() {
                 if (res.ok) {
                   setAvatarUrl(d.avatarUrl);
                   deleteCached(`/api/profile/${profile.username}`);
+                  await loadSession();
                 } else {
                   setAvatarUrl(profile.avatarUrl ?? null);
                 }
@@ -301,7 +303,7 @@ export default function Settings() {
           {displayNameError && <p style={{ textAlign: "center" }}><strong>{displayNameError}</strong></p>}
           {displayNameSuccess && <p style={{ textAlign: "center" }}>Display name updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="G" disabled={displayNameSubmitting || !displayName.trim()} from="#0ea5e9" to="#6366f1">Save display name</BlobButton>
+            <BlobButton blob="G" disabled={displayNameSubmitting || !displayName.trim() || !displayNameDirty} from="#0ea5e9" to="#6366f1">Save display name</BlobButton>
           </p>
         </form>
       </div>
@@ -589,7 +591,7 @@ export default function Settings() {
           {appearanceError && <p style={{ textAlign: "center" }}><strong>{appearanceError}</strong></p>}
           {appearanceSuccess && <p style={{ textAlign: "center" }}>Appearance saved!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="E" disabled={appearanceSubmitting} from="#f78f1e" to="#ee3666">Save appearance</BlobButton>
+            <BlobButton blob="E" disabled={appearanceSubmitting || !appearanceDirty} from="#f78f1e" to="#ee3666">Save appearance</BlobButton>
           </p>
         </form>
       </div>
@@ -612,7 +614,7 @@ export default function Settings() {
           {bioError && <p style={{ textAlign: "center" }}><strong>{bioError}</strong></p>}
           {bioSuccess && <p style={{ textAlign: "center" }}>Bio updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="F" disabled={bioSubmitting} from="#9333ea" to="#e879b0">Save bio</BlobButton>
+            <BlobButton blob="F" disabled={bioSubmitting || !bioDirty} from="#9333ea" to="#e879b0">Save bio</BlobButton>
           </p>
         </form>
       </div>
@@ -693,7 +695,7 @@ export default function Settings() {
           {categoryError && <p style={{ textAlign: "center" }}><strong>{categoryError}</strong></p>}
           {categorySuccess && <p style={{ textAlign: "center" }}>Categories updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="G" disabled={categorySubmitting} from="#ffe100" to="#f78f1e">Save categories</BlobButton>
+            <BlobButton blob="G" disabled={categorySubmitting || !categoriesDirty} from="#ffe100" to="#f78f1e">Save categories</BlobButton>
           </p>
         </form>
       </div>
