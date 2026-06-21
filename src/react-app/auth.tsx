@@ -66,12 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadSession = useCallback(async () => {
     try {
-      const rawRes = await fetch(`${import.meta.env.VITE_AUTH_URL}/get-session`, { credentials: "include" });
-      console.log("[loadSession] raw /get-session status:", rawRes.status, "ok:", rawRes.ok);
-      const rawText = await rawRes.text();
-      console.log("[loadSession] raw /get-session body:", rawText.slice(0, 300));
+      await fetch(`${import.meta.env.VITE_AUTH_URL}/get-session`, { credentials: "include" });
       const { data } = await authClient.getSession();
-      console.log("[loadSession] getSession data:", data);
       if (!data?.session) {
         clearAuthSnapshot();
         setSession(null);
@@ -80,7 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const jwt = await getJwt();
-      console.log("[loadSession] getJwt result:", jwt);
       if (!jwt) {
         clearAuthSnapshot();
         setSession(null);
@@ -135,7 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetch(`${import.meta.env.VITE_AUTH_URL}/get-session?neon_auth_session_verifier=${verifier}`, {
         credentials: "include",
       }).then(r => r.text()).then(body => {
-        console.log("[magic-link] get-session?verifier body:", body.slice(0, 300));
         loadSession();
       }).catch(() => loadSession());
       return;
