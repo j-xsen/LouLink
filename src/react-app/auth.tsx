@@ -129,9 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // appends neon_auth_session_verifier to the redirect and may handle it here.
       fetch(`${import.meta.env.VITE_AUTH_URL}/get-session?neon_auth_session_verifier=${verifier}`, {
         credentials: "include",
-      }).then(r => r.text()).then(body => {
-        loadSession();
-      }).catch(() => loadSession());
+      }).then(() => loadSession()).catch(() => loadSession());
       return;
     }
 
