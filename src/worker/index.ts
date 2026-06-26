@@ -16,7 +16,7 @@ const MAX_LINK_TITLE = 100;
 const MAX_LINK_URL = 2048;
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const OG_BODY_LIMIT = 512 * 1024; // 512 KB — caps external page reads in /api/og
-const OG_IMG_LIMIT = 2 * 1024 * 1024; // 2 MB — caps image proxy responses
+const OG_IMG_LIMIT = 300 * 1024; // 300 KB — link cards render at 110×72 px
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
 const UNAVATAR_DAILY_CAP = 40; // hard stop below the 50/day plan limit
 
@@ -542,7 +542,7 @@ app.get("/api/og", async (c) => {
   try {
     const host = new URL(url).hostname;
     if (OG_BLOCKED_HOSTS.has(host)) {
-      c.header("Cache-Control", "public, max-age=300");
+      c.header("Cache-Control", "public, max-age=86400");
       return c.json({ ogImage: null });
     }
   } catch { /* invalid URL already caught by sanitizeUrl */ }
@@ -597,7 +597,7 @@ app.get("/api/og", async (c) => {
     /* timeout or network error */
   }
 
-  c.header("Cache-Control", "public, max-age=300");
+  c.header("Cache-Control", "public, max-age=86400");
   return c.json({ ogImage });
 });
 
@@ -692,7 +692,7 @@ app.get("/api/og-img", async (c) => {
       },
     });
     const imageBuffer = await new Response(res.body?.pipeThrough(limiter) ?? null).arrayBuffer();
-    const maxAge = isUnavatar ? 259200 : 3600;
+    const maxAge = isUnavatar ? 259200 : 604800;
     const imageRes = new Response(imageBuffer, {
       headers: {
         "Content-Type": mimeBase,

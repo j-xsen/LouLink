@@ -79,6 +79,7 @@ export default function ProfilePage() {
   );
   const [status, setStatus] = useState<"loading" | "found" | "not-found">(cachedProfile ? "found" : "loading");
   const [ogImages, setOgImages] = useState<Record<string, string | null>>({});
+  const cardRefs = useRef<Map<string, Element>>(new Map());
 
   // Pending theme key for owner preview before saving
   const themeInitialized = useRef(false);
@@ -200,11 +201,10 @@ export default function ProfilePage() {
   }, [profile]);
 
   useEffect(() => {
-    const linkUrls = items
-      .filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link")
-      .map((it) => it.url);
-    if (linkUrls.length === 0) return;
-    for (const url of linkUrls) {
+    const linkItems = items.filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link");
+    if (linkItems.length === 0) return;
+
+    function fetchOg(url: string) {
       fetch(`/api/og?url=${encodeURIComponent(url)}`)
         .then((r) => r.ok ? r.json() : null)
         .then((d: { ogImage: string | null } | null) => {
@@ -212,10 +212,28 @@ export default function ProfilePage() {
           const ogImage = raw ? raw.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') : null;
           setOgImages((prev) => ({ ...prev, [url]: ogImage }));
         })
-        .catch(() => {
-          setOgImages((prev) => ({ ...prev, [url]: null }));
-        });
+        .catch(() => setOgImages((prev) => ({ ...prev, [url]: null })));
     }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const url = (entry.target as HTMLElement).dataset.ogUrl;
+        if (!url) return;
+        observer.unobserve(entry.target);
+        setOgImages((prev) => {
+          if (url in prev) return prev;
+          fetchOg(url);
+          return prev;
+        });
+      });
+    }, { rootMargin: "200px" });
+
+    const refs = cardRefs.current;
+    refs.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  // ogImages intentionally excluded — re-subscribing on every image load would re-observe already-done cards
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 
   const isOwner = !!authProfile && authProfile.username === username;
@@ -539,6 +557,11 @@ export default function ProfilePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-card"
+                data-og-url={item.url}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(item.url, el);
+                  else cardRefs.current.delete(item.url);
+                }}
                 style={{ background: theme.card, color: theme.cardText, borderColor: `${theme.label}28` }}
                 onClick={() => handleLinkClick(item.id)}
               >
@@ -558,6 +581,8 @@ export default function ProfilePage() {
                       <img
                         src={`/api/og-img?url=${encodeURIComponent(ogStatus)}`}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         onError={() => { setOgImages((prev) => ({ ...prev, [item.url]: null })); }}
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                       />
