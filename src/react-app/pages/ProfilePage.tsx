@@ -69,7 +69,14 @@ export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const { loading: authLoading, session, profile: authProfile } = useAuth();
   const cacheKey = `/api/profile/${username}`;
-  const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey);
+  // Use server-injected inline data (Worker embeds this for cached profiles) when
+  // the in-memory cache is cold, e.g. on a hard page load or first visit.
+  const serverInjected =
+    typeof window !== "undefined" &&
+    (window as any).__PROFILE_USER__ === username
+      ? ((window as any).__PROFILE__ as { profile: PublicProfile; links: any[] } | null)
+      : null;
+  const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey) ?? serverInjected;
   const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
   const [items, setItems] = useState<PublicItem[]>(() =>
     cachedProfile ? (cachedProfile.links ?? []).map((l: any) => l.kind === "header"
@@ -127,6 +134,13 @@ export default function ProfilePage() {
     url: profile ? `https://loul.ink/${profile.username}` : undefined,
     ogType: profile ? "profile" : "website",
   });
+
+  // Prime in-memory cache from server-injected data so SPA navigation gets a cache hit
+  useEffect(() => {
+    if (serverInjected && !getCached(cacheKey)) {
+      setCached(cacheKey, serverInjected);
+    }
+  }, [cacheKey, serverInjected]);
 
   // JSON-LD for in-SPA navigation (server already injects this on direct load)
   useEffect(() => {

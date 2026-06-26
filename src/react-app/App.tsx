@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { createBrowserRouter, Outlet, RouterProvider, useLocation, useSearchParams } from "react-router-dom";
 import { AuthProvider, RedirectIfAuthed, RequireProfile, useAuth } from "./auth";
 import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 const CreatePage = lazy(() => import("./pages/CreatePage"));
 const SignIn = lazy(() => import("./pages/SignIn"));
@@ -94,7 +94,7 @@ const router = createBrowserRouter([
   {
     element: <Root />,
     children: [
-      { path: "/", element: <IndexRoute /> },
+      { path: "/", element: <Suspense><IndexRoute /></Suspense> },
       { path: "/signin", element: <RedirectIfAuthed><Suspense><SignIn /></Suspense></RedirectIfAuthed> },
       { path: "/signup", element: <RedirectIfAuthed><Suspense><SignUp /></Suspense></RedirectIfAuthed> },
       { path: "/forgot-password", element: <RedirectIfAuthed><Suspense><ForgotPassword /></Suspense></RedirectIfAuthed> },

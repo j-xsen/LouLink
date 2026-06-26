@@ -24,6 +24,8 @@ function htmlPatchPlugin(): Plugin {
       let cssFile: string | null = null;
       let css = "";
       let logoHref: string | null = null;
+      const modulePreloadChunks: string[] = [];
+      const PRELOAD_PREFIXES = ["ProfilePage", "icons", "color", "link"];
 
       try {
         for (const file of readdirSync(assetsDir)) {
@@ -33,6 +35,9 @@ function htmlPatchPlugin(): Plugin {
           }
           if (file.startsWith("logo-full-color") && file.endsWith(".svg")) {
             logoHref = `/assets/${file}`;
+          }
+          if (file.endsWith(".js") && PRELOAD_PREFIXES.some((p) => file.startsWith(p))) {
+            modulePreloadChunks.push(`/assets/${file}`);
           }
         }
       } catch { return; }
@@ -47,10 +52,13 @@ function htmlPatchPlugin(): Plugin {
           );
         }
 
-        // 2. Build the injection block: preload + inline style
+        // 2. Build the injection block: preload + modulepreload chunks + inline style
         let injection = "";
         if (logoHref) {
           injection += `<link rel="preload" as="image" href="${logoHref}" fetchpriority="high">`;
+        }
+        for (const href of modulePreloadChunks) {
+          injection += `<link rel="modulepreload" href="${href}">`;
         }
         if (css) {
           injection += `<style>${css}</style>`;
