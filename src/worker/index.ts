@@ -1211,7 +1211,7 @@ app.get("/:username", async (c) => {
 
   // Use avatar when available; fall back to branded OG image
   const assetId = profile.avatar_asset_id as string | null;
-  const ogImage = assetId ? avatarUrl(assetId, "https://loul.ink") : "https://loul.ink/og-image.jpg";
+  const ogImage = (assetId ? avatarUrl(assetId, "https://loul.ink") : null) ?? "https://loul.ink/og-image.jpg";
   const twitterCard = assetId ? "summary" : "summary_large_image";
 
   // JSON-LD structured data — Person or LocalBusiness based on categories

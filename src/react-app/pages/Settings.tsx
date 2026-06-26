@@ -79,7 +79,14 @@ function resolvePreviewTheme(accentColor: string | null, cardColor: string | nul
 }
 
 export default function Settings() {
-  const { session, profile, hasPassword, loadSession } = useAuth();
+  const { session, profile, loadSession } = useAuth();
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    authClient.$fetch<Array<{ providerId: string }>>("/list-accounts").then((res) => {
+      setHasPassword((res.data ?? []).some((a) => a.providerId === "credential"));
+    }).catch(() => setHasPassword(false));
+  }, []);
   useSeo({ title: "Settings | LouLink", noindex: true });
 
   // Profile info (display name + bio — saved together)
@@ -886,7 +893,7 @@ export default function Settings() {
       {/* Password — shown for all users */}
       <div id="password" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Password</h2>
-        {hasPassword ? (
+        {hasPassword === null ? null : hasPassword ? (
           <>
             <p style={{ textAlign: "center", marginTop: 0, fontSize: "0.875rem", color: "#666" }}>
               We'll email you a link to set a new password.
