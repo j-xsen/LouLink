@@ -82,15 +82,16 @@ export function registerSsrRoutes(app: App): void {
       "sameAs": url,
     };
 
-    // Performance hints: preload the profile API fetch and avatar image so the
-    // browser starts them at HTML-arrival time rather than after JS executes.
-    const encodedUsername = encodeURIComponent(username);
-    const profileApiPreload = `<link rel="preload" as="fetch" crossorigin href="/api/profile/${encodedUsername}">`;
+    // Preload avatar image so the browser starts downloading it before JS executes.
+    // Note: we intentionally skip <link rel="preload" as="fetch"> for the profile API.
+    // fetch() uses credentials:same-origin but a preload with crossorigin uses credentials:omit —
+    // mismatched credential modes cause the preload to never be reused, resulting in a double-fetch
+    // that wastes bandwidth and hurts LCP. The window.__PROFILE__ approach below is better anyway.
     const avatarPreloadLink = avatarImgUrl
       ? `<link rel="preload" as="image" href="${escHtml(avatarImgUrl)}">`
       : "";
 
-    // Embed full profile data from Worker Cache API so React skips the API call.
+    // Embed full profile data from Worker Cache API so React skips the API call entirely.
     let profileDataScript = "";
     try {
       const profileCacheKey = `${new URL(c.req.url).origin}/api/profile/${username}`;
@@ -121,7 +122,6 @@ export function registerSsrRoutes(app: App): void {
       `<meta name="twitter:image" content="${escHtml(ogImage)}">`,
       `<link rel="canonical" href="${escHtml(url)}">`,
       `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
-      profileApiPreload,
       avatarPreloadLink,
       profileDataScript,
     ].filter(Boolean).join("\n\t\t");

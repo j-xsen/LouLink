@@ -175,6 +175,10 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!username) { setStatus("not-found"); return; }
+    // Skip the network fetch when the Worker already embedded fresh data in the HTML.
+    // serverInjected is only non-null when window.__PROFILE_USER__ === username, so
+    // SPA navigation to a different profile correctly re-fetches.
+    if (serverInjected) return;
     fetch(`/api/profile/${encodeURIComponent(username)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {

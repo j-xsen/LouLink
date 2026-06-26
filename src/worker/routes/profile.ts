@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { createDb } from "../db";
 import { USERNAME_RE } from "../lib/constants";
-import { avatarUrl, bustProfileCache } from "../lib/utils";
+import { avatarUrl } from "../lib/utils";
 
 type App = Hono<{ Bindings: Env; Variables: { userId: string } }>;
 
