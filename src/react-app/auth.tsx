@@ -16,7 +16,7 @@ import type { SessionData, ProfileData } from "./types";
 const AUTH_KEY = "loulink_auth";
 const AUTH_TTL = 5 * 60 * 1000;
 
-type AuthSnapshot = { token: string; name: string; profile: ProfileData | null };
+type AuthSnapshot = { token: string; name: string; email: string; profile: ProfileData | null; hasPassword: boolean };
 
 function readAuthSnapshot(): AuthSnapshot | null {
   try {
@@ -28,8 +28,8 @@ function readAuthSnapshot(): AuthSnapshot | null {
   } catch { return null; }
 }
 
-function writeAuthSnapshot(token: string, name: string, profile: ProfileData | null) {
-  try { localStorage.setItem(AUTH_KEY, JSON.stringify({ data: { token, name, profile }, ts: Date.now() })); } catch {}
+function writeAuthSnapshot(token: string, name: string, email: string, profile: ProfileData | null, hasPassword: boolean) {
+  try { localStorage.setItem(AUTH_KEY, JSON.stringify({ data: { token, name, email, profile, hasPassword }, ts: Date.now() })); } catch {}
 }
 
 function clearAuthSnapshot() {
@@ -44,6 +44,7 @@ type AuthContextType = {
   loading: boolean;
   session: SessionData | null;
   profile: ProfileData | null;
+  hasPassword: boolean;
   loadSession: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -52,6 +53,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   session: null,
   profile: null,
+  hasPassword: false,
   loadSession: async () => {},
   signOut: async () => {},
 });
@@ -60,9 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const snap = readAuthSnapshot();
   const [loading, setLoading] = useState(!snap);
   const [session, setSession] = useState<SessionData | null>(
-    snap ? { token: snap.token, name: snap.name } : null
+    snap ? { token: snap.token, name: snap.name, email: snap.email ?? "" } : null
   );
   const [profile, setProfile] = useState<ProfileData | null>(snap?.profile ?? null);
+  const [hasPassword, setHasPassword] = useState<boolean>(snap?.hasPassword ?? false);
 
   const loadSession = useCallback(async () => {
     try {
@@ -72,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearAuthSnapshot();
         setSession(null);
         setProfile(null);
+        setHasPassword(false);
         setLoading(false);
         return;
       }
@@ -80,30 +84,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearAuthSnapshot();
         setSession(null);
         setProfile(null);
+        setHasPassword(false);
         setLoading(false);
         return;
       }
       const s: SessionData = {
         token: jwt,
         name: data.user.name ?? "",
+        email: data.user.email ?? "",
       };
       setSession(s);
+      let p: ProfileData | null = null;
+      let pw = false;
       try {
-        const res = await fetch("/api/me", {
-          headers: { Authorization: `Bearer ${s.token}` },
-        });
-        const d = await res.json();
-        const p = d.profile ?? null;
-        setProfile(p);
-        writeAuthSnapshot(jwt, s.name, p);
+        const [meRes, accountsRes] = await Promise.all([
+          fetch("/api/me", { headers: { Authorization: `Bearer ${s.token}` } }),
+          authClient.$fetch<Array<{ providerId: string }>>("/list-accounts"),
+        ]);
+        const d = await meRes.json();
+        p = d.profile ?? null;
+        pw = (accountsRes.data ?? []).some((a) => a.providerId === "credential");
       } catch {
-        setProfile(null);
+        p = null;
+        pw = false;
       }
+      setProfile(p);
+      setHasPassword(pw);
+      writeAuthSnapshot(jwt, s.name, s.email, p, pw);
       setLoading(false);
     } catch {
       clearAuthSnapshot();
       setSession(null);
       setProfile(null);
+      setHasPassword(false);
       setLoading(false);
     }
   }, []);
@@ -114,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuthSnapshot();
     setSession(null);
     setProfile(null);
+    setHasPassword(false);
   }, []);
 
   useEffect(() => {
@@ -137,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadSession]);
 
   return (
-    <AuthContext.Provider value={{ loading, session, profile, loadSession, signOut }}>
+    <AuthContext.Provider value={{ loading, session, profile, hasPassword, loadSession, signOut }}>
       {children}
     </AuthContext.Provider>
   );

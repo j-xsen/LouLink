@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { authClient } from "../auth-client";
 import { useSeo } from "../lib/seo";
 import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 
@@ -35,14 +36,12 @@ export default function ResetPassword() {
     if (password !== confirm) { setError("Passwords don't match."); return; }
     setSubmitting(true);
     setError("");
-    const res = await fetch("/api/reset-password", {
+    const { error: fetchError } = await authClient.$fetch("/reset-password", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, newPassword: password }),
+      body: { newPassword: password, token },
     });
-    if (!res.ok) {
-      const d = await res.json() as { error?: string };
-      setError(d.error ?? "Reset failed. The link may have expired.");
+    if (fetchError) {
+      setError((fetchError as { message?: string }).message ?? "Reset failed. The link may have expired.");
       setSubmitting(false);
       return;
     }

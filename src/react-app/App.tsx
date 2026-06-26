@@ -8,6 +8,7 @@ const CreatePage = lazy(() => import("./pages/CreatePage"));
 const SignIn = lazy(() => import("./pages/SignIn"));
 const SignUp = lazy(() => import("./pages/SignUp"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Settings = lazy(() => import("./pages/Settings"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const Analytics = lazy(() => import("./pages/Analytics"));
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
       { path: "/signin", element: <RedirectIfAuthed><Suspense><SignIn /></Suspense></RedirectIfAuthed> },
       { path: "/signup", element: <RedirectIfAuthed><Suspense><SignUp /></Suspense></RedirectIfAuthed> },
       { path: "/forgot-password", element: <RedirectIfAuthed><Suspense><ForgotPassword /></Suspense></RedirectIfAuthed> },
+      { path: "/reset-password", element: <Suspense><ResetPassword /></Suspense> },
       { path: "/create", element: <Suspense><CreatePage /></Suspense> },
       { path: "/settings", element: <RequireProfile><Suspense><Settings /></Suspense></RequireProfile> },
       { path: "/analytics", element: <RequireProfile><Suspense><Analytics /></Suspense></RequireProfile> },

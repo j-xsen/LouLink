@@ -2,7 +2,7 @@
 // Shared TypeScript types + constants
 // ---------------------------------------------------------------------------
 
-export type SessionData = { token: string; name: string };
+export type SessionData = { token: string; name: string; email: string };
 export type ProfileData = {
   username: string;
   display_name: string;

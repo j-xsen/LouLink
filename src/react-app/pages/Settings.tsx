@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { Link as LinkIcon } from "lucide-react";
 import { useNavigationWarning } from "../lib/useNavigationWarning";
 import { useAuth } from "../auth";
+import { authClient } from "../auth-client";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { autoTextColor, extractDominantColor, generateCardPalette } from "../lib/color";
@@ -43,7 +44,7 @@ function resolvePreviewTheme(accentColor: string | null, cardColor: string | nul
 }
 
 export default function Settings() {
-  const { session, profile, loadSession } = useAuth();
+  const { session, profile, hasPassword, loadSession } = useAuth();
   useSeo({ title: "Settings | LouLink", noindex: true });
   const [username, setUsername] = useState(profile?.username ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
@@ -79,6 +80,14 @@ export default function Settings() {
   const [hideFromDirectory, setHideFromDirectory] = useState(profile?.hide_from_directory ?? false);
   const [visibilitySuccess, setVisibilitySuccess] = useState(false);
   const [visibilitySubmitting, setVisibilitySubmitting] = useState(false);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [resetLinkSent, setResetLinkSent] = useState(false);
+  const [resetLinkSubmitting, setResetLinkSubmitting] = useState(false);
 
   const previewTheme = resolvePreviewTheme(accentColor, cardColor, cardTextColor);
   const isCustomAccent = accentColor !== null && !THEMES[accentColor];
@@ -220,6 +229,37 @@ export default function Settings() {
     deleteCached(`/api/profile/${profile?.username}`);
     deleteCached(`/api/profile/${username}`);
     deleteCached("/api/directory");
+    await loadSession();
+  }
+
+  async function handleSendResetLink() {
+    if (!session) return;
+    setResetLinkSubmitting(true);
+    setResetLinkSent(false);
+    await authClient.$fetch("/request-password-reset", {
+      method: "POST",
+      body: { email: session.email, redirectTo: `${window.location.origin}/reset-password` },
+    });
+    setResetLinkSent(true);
+    setResetLinkSubmitting(false);
+  }
+
+  async function handleSetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) { setPasswordError("Passwords don't match."); return; }
+    setPasswordSubmitting(true);
+    setPasswordError("");
+    setPasswordSuccess(false);
+    const { error } = await authClient.$fetch("/set-password", { method: "POST", body: { newPassword } });
+    if (error) {
+      setPasswordError((error as { message?: string }).message ?? "Failed to set password.");
+      setPasswordSubmitting(false);
+      return;
+    }
+    setPasswordSuccess(true);
+    setPasswordSubmitting(false);
+    setNewPassword("");
+    setConfirmPassword("");
     await loadSession();
   }
 
@@ -721,6 +761,79 @@ export default function Settings() {
           )}
         </div>
       )}
+
+      {/* Password — shown for all users */}
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Password</h2>
+        {hasPassword ? (
+          <>
+            <p style={{ textAlign: "center", marginTop: 0, fontSize: "0.875rem", color: "#666" }}>
+              We'll email you a link to set a new password.
+            </p>
+            {resetLinkSent && <p style={{ textAlign: "center" }}>Check your email for a reset link!</p>}
+            <p style={{ textAlign: "center", marginBottom: 0 }}>
+              <BlobButton
+                blob="A"
+                disabled={resetLinkSubmitting || resetLinkSent}
+                from="#ee3666"
+                to="#f78f1e"
+                type="button"
+                onClick={handleSendResetLink}
+              >
+                {resetLinkSubmitting ? "Sending…" : resetLinkSent ? "Email sent" : "Send reset link"}
+              </BlobButton>
+            </p>
+          </>
+        ) : (
+          <>
+            <p style={{ textAlign: "center", marginTop: 0, fontSize: "0.875rem", color: "#666" }}>
+              You signed in with a magic link. Add a password to sign in with email too.
+            </p>
+            <form onSubmit={handleSetPassword}>
+              <label>
+                <span className="settings-label">New password (min 8 characters)</span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => { setNewPassword(e.target.value); setPasswordSuccess(false); }}
+                  required
+                />
+              </label>
+              {newPassword && (
+                <div style={{ fontSize: "0.85rem", marginTop: "0.25rem", color: newPassword.length >= 8 ? "#16a34a" : "#dc2626" }}>
+                  {newPassword.length >= 8 ? "✓ Good" : `✗ Too short (${newPassword.length}/8)`}
+                </div>
+              )}
+              <label style={{ marginTop: "0.75rem", display: "block" }}>
+                <span className="settings-label">Confirm password</span>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSuccess(false); }}
+                  required
+                />
+              </label>
+              {confirmPassword && (
+                <div style={{ fontSize: "0.85rem", marginTop: "0.25rem", color: newPassword === confirmPassword ? "#16a34a" : "#dc2626" }}>
+                  {newPassword === confirmPassword ? "✓ Matches" : "✗ Doesn't match"}
+                </div>
+              )}
+              {passwordError && <p style={{ textAlign: "center" }}><strong>{passwordError}</strong></p>}
+              {passwordSuccess && <p style={{ textAlign: "center" }}>Password set! You can now sign in with your email and password.</p>}
+              <p style={{ textAlign: "center", marginBottom: 0 }}>
+                <BlobButton
+                  blob="A"
+                  disabled={passwordSubmitting || newPassword.length < 8 || newPassword !== confirmPassword}
+                  from="#ee3666"
+                  to="#f78f1e"
+                >
+                  {passwordSubmitting ? "Saving…" : "Set password"}
+                </BlobButton>
+              </p>
+            </form>
+          </>
+        )}
+      </div>
 
       {/* Username */}
       <div className="settings-card">
