@@ -52,7 +52,6 @@ function htmlPatchPlugin(): Plugin {
         if (logoHref) {
           injection += `<link rel="preload" as="image" href="${logoHref}" fetchpriority="high">`;
         }
-        injection += `<link rel="preload" href="/api/directory" as="fetch" crossorigin="anonymous">`;
         if (css) {
           injection += `<style>${css}</style>`;
         }

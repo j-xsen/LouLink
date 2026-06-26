@@ -2,7 +2,7 @@
 // Settings page
 // ---------------------------------------------------------------------------
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Link as LinkIcon } from "lucide-react";
 import { useNavigationWarning } from "../lib/useNavigationWarning";
@@ -21,6 +21,41 @@ const GROUP_COLORS: Record<string, string> = {
   venues: "#a78bfa", community: "#d88cbb",
 };
 
+// Returns [isActive, trigger]. Calling trigger() sets true and auto-clears after delay ms.
+function useAutoReset(delay = 3500): [boolean, () => void] {
+  const [state, setState] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const trigger = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setState(true);
+    timerRef.current = setTimeout(() => setState(false), delay);
+  }, [delay]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return [state, trigger];
+}
+
+function JumpNavLink({ href, label }: { href: string; label: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <a
+      href={href}
+      style={{
+        fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
+        letterSpacing: "0.08em", color: hovered ? "#333" : "#888",
+        textDecoration: "none", padding: "0.25rem 0.6rem",
+        borderRadius: 100, border: `1px solid ${hovered ? "#aaa" : "#e5e7eb"}`,
+        transition: "color 150ms, border-color 150ms",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {label}
+    </a>
+  );
+}
 
 function bgForKey(key: string | null): string {
   if (key && THEMES[key]) return THEMES[key].bg;
@@ -46,25 +81,28 @@ function resolvePreviewTheme(accentColor: string | null, cardColor: string | nul
 export default function Settings() {
   const { session, profile, hasPassword, loadSession } = useAuth();
   useSeo({ title: "Settings | LouLink", noindex: true });
-  const [username, setUsername] = useState(profile?.username ?? "");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+
+  // Profile info (display name + bio — saved together)
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
-  const [displayNameError, setDisplayNameError] = useState("");
-  const [displayNameSuccess, setDisplayNameSuccess] = useState(false);
-  const [displayNameSubmitting, setDisplayNameSubmitting] = useState(false);
   const [bio, setBio] = useState(profile?.bio ?? "");
-  const [bioError, setBioError] = useState("");
-  const [bioSuccess, setBioSuccess] = useState(false);
-  const [bioSubmitting, setBioSubmitting] = useState(false);
+  const [profileInfoError, setProfileInfoError] = useState("");
+  const [profileInfoSuccess, triggerProfileInfoSuccess] = useAutoReset();
+  const [profileInfoSubmitting, setProfileInfoSubmitting] = useState(false);
+
+  // Avatar
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl ?? null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarSuccess, triggerAvatarSuccess] = useAutoReset();
+  const [avatarError, setAvatarError] = useState("");
+
+  // Categories
   const [categories, setCategories] = useState<string[]>(profile?.categories ?? []);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState("");
-  const [categorySuccess, setCategorySuccess] = useState(false);
+  const [categorySuccess, triggerCategorySuccess] = useAutoReset();
   const [categorySubmitting, setCategorySubmitting] = useState(false);
 
+  // Appearance
   const { themeKey: initTheme, headerColor: initHeader, monoSocial: initMono, avatarShape: initShape, cardColor: initCardColor, cardTextColor: initCardTextColor } = parseAccentColor(profile?.accent_color ?? null);
   const [accentColor, setAccentColor] = useState<string | null>(initTheme);
   const [headerColor, setHeaderColor] = useState<string | null>(initHeader);
@@ -74,17 +112,26 @@ export default function Settings() {
   const [cardTextColor, setCardTextColor] = useState<string | null>(initCardTextColor);
   const [extractingColor, setExtractingColor] = useState(false);
   const [appearanceError, setAppearanceError] = useState("");
-  const [appearanceSuccess, setAppearanceSuccess] = useState(false);
+  const [appearanceSuccess, triggerAppearanceSuccess] = useAutoReset();
   const [appearanceSubmitting, setAppearanceSubmitting] = useState(false);
 
+  // Directory visibility
   const [hideFromDirectory, setHideFromDirectory] = useState(profile?.hide_from_directory ?? false);
-  const [visibilitySuccess, setVisibilitySuccess] = useState(false);
+  const [pendingHide, setPendingHide] = useState(profile?.hide_from_directory ?? false);
+  const [visibilitySuccess, triggerVisibilitySuccess] = useAutoReset();
   const [visibilitySubmitting, setVisibilitySubmitting] = useState(false);
 
+  // Username
+  const [username, setUsername] = useState(profile?.username ?? "");
+  const [error, setError] = useState("");
+  const [success, triggerSuccess] = useAutoReset();
+  const [submitting, setSubmitting] = useState(false);
+
+  // Password
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordSuccess, triggerPasswordSuccess] = useAutoReset();
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [resetLinkSent, setResetLinkSent] = useState(false);
   const [resetLinkSubmitting, setResetLinkSubmitting] = useState(false);
@@ -96,18 +143,18 @@ export default function Settings() {
 
   const displayNameDirty = displayName !== (profile?.display_name ?? "");
   const bioDirty = bio !== (profile?.bio ?? "");
+  const profileInfoDirty = displayNameDirty || bioDirty;
   const categoriesDirty = JSON.stringify([...categories].sort()) !== JSON.stringify([...(profile?.categories ?? [])].sort());
   const appearanceDirty = accentColor !== initTheme || headerColor !== initHeader || monoSocial !== initMono ||
     avatarShape !== initShape || cardColor !== initCardColor || cardTextColor !== initCardTextColor;
 
-  const anyDirty = displayNameDirty || bioDirty || categoriesDirty || appearanceDirty ||
+  const anyDirty = profileInfoDirty || categoriesDirty || appearanceDirty ||
     username !== (profile?.username ?? "");
   useNavigationWarning(anyDirty);
 
   async function handleVisibilityToggle(hide: boolean) {
     if (!session) return;
     setVisibilitySubmitting(true);
-    setVisibilitySuccess(false);
     const res = await fetch("/api/me/directory-visibility", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
@@ -115,50 +162,52 @@ export default function Settings() {
     });
     if (res.ok) {
       setHideFromDirectory(hide);
-      setVisibilitySuccess(true);
+      triggerVisibilitySuccess();
       deleteCached("/api/directory");
+      await loadSession();
     }
     setVisibilitySubmitting(false);
   }
 
-  async function handleDisplayNameSubmit(e: React.FormEvent) {
+  async function handleProfileInfoSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!session) return;
-    setDisplayNameSubmitting(true);
-    setDisplayNameError("");
-    setDisplayNameSuccess(false);
-    const res = await fetch("/api/me/display-name", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ display_name: displayName }),
-    });
-    const d = await res.json();
-    if (!res.ok) { setDisplayNameError(d.error ?? "Failed to update."); setDisplayNameSubmitting(false); return; }
-    setDisplayNameSuccess(true);
-    setDisplayNameSubmitting(false);
-    deleteCached(`/api/profile/${profile?.username}`);
-    deleteCached("/api/directory");
-    await loadSession();
-  }
+    if (!session || !profileInfoDirty) return;
+    setProfileInfoSubmitting(true);
+    setProfileInfoError("");
 
-  async function handleBioSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!session) return;
-    setBioSubmitting(true);
-    setBioError("");
-    setBioSuccess(false);
-    const res = await fetch("/api/me/bio", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ bio }),
-    });
-    const d = await res.json();
-    if (!res.ok) { setBioError(d.error ?? "Failed to update."); setBioSubmitting(false); return; }
-    setBioSuccess(true);
-    setBioSubmitting(false);
+    if (displayNameDirty) {
+      const res = await fetch("/api/me/display-name", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ display_name: displayName }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setProfileInfoError(d.error ?? "Failed to update display name.");
+        setProfileInfoSubmitting(false);
+        return;
+      }
+    }
+
+    if (bioDirty) {
+      const res = await fetch("/api/me/bio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ bio }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setProfileInfoError(d.error ?? "Failed to update bio.");
+        setProfileInfoSubmitting(false);
+        return;
+      }
+    }
+
     deleteCached(`/api/profile/${profile?.username}`);
     deleteCached("/api/directory");
     await loadSession();
+    triggerProfileInfoSuccess();
+    setProfileInfoSubmitting(false);
   }
 
   function toggleCategory(value: string) {
@@ -172,7 +221,6 @@ export default function Settings() {
     if (!session) return;
     setCategorySubmitting(true);
     setCategoryError("");
-    setCategorySuccess(false);
     const res = await fetch("/api/me/categories", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
@@ -180,7 +228,7 @@ export default function Settings() {
     });
     const d = await res.json();
     if (!res.ok) { setCategoryError(d.error ?? "Failed to update."); setCategorySubmitting(false); return; }
-    setCategorySuccess(true);
+    triggerCategorySuccess();
     setCategorySubmitting(false);
     deleteCached(`/api/profile/${profile?.username}`);
     deleteCached("/api/directory");
@@ -192,7 +240,6 @@ export default function Settings() {
     if (!session) return;
     setAppearanceSubmitting(true);
     setAppearanceError("");
-    setAppearanceSuccess(false);
     const res = await fetch("/api/me/accent", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
@@ -200,9 +247,10 @@ export default function Settings() {
     });
     const d = await res.json();
     if (!res.ok) { setAppearanceError(d.error ?? "Failed to update."); setAppearanceSubmitting(false); return; }
-    setAppearanceSuccess(true);
+    triggerAppearanceSuccess();
     setAppearanceSubmitting(false);
     deleteCached(`/api/profile/${profile?.username}`);
+    deleteCached("/api/directory");
     await loadSession();
   }
 
@@ -216,7 +264,6 @@ export default function Settings() {
     if (!canSubmit || !session) return;
     setSubmitting(true);
     setError("");
-    setSuccess(false);
     const res = await fetch("/api/me/username", {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
@@ -224,7 +271,7 @@ export default function Settings() {
     });
     const d = await res.json();
     if (!res.ok) { setError(d.error ?? "Something went wrong."); setSubmitting(false); return; }
-    setSuccess(true);
+    triggerSuccess();
     setSubmitting(false);
     deleteCached(`/api/profile/${profile?.username}`);
     deleteCached(`/api/profile/${username}`);
@@ -249,14 +296,13 @@ export default function Settings() {
     if (newPassword !== confirmPassword) { setPasswordError("Passwords don't match."); return; }
     setPasswordSubmitting(true);
     setPasswordError("");
-    setPasswordSuccess(false);
     const { error } = await authClient.$fetch("/set-password", { method: "POST", body: { newPassword } });
     if (error) {
       setPasswordError((error as { message?: string }).message ?? "Failed to set password.");
       setPasswordSubmitting(false);
       return;
     }
-    setPasswordSuccess(true);
+    triggerPasswordSuccess();
     setPasswordSubmitting(false);
     setNewPassword("");
     setConfirmPassword("");
@@ -270,6 +316,16 @@ export default function Settings() {
     letterSpacing: "0.08em", color: "#888", marginBottom: "0.5rem", display: "block",
   };
 
+  const successMsgStyle: React.CSSProperties = {
+    textAlign: "center", color: "#16a34a", fontSize: "0.875rem",
+    fontWeight: 600, margin: "0.5rem 0 0",
+  };
+
+  const errorMsgStyle: React.CSSProperties = {
+    textAlign: "center", color: "#dc2626", fontSize: "0.875rem",
+    fontWeight: 600, margin: "0.5rem 0 0",
+  };
+
   return (
     <>
       <PageHeader right={
@@ -280,8 +336,26 @@ export default function Settings() {
       } />
       <ShapeTitle>Settings</ShapeTitle>
 
-      {/* Profile picture */}
+      {/* Jump nav */}
       <div className="settings-card">
+        <h2 style={{ textAlign: "center", marginTop: 0 }}>Jump to</h2>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem 0.75rem", justifyContent: "center" }}>
+          {([
+            ["#profile-picture", "Photo"],
+            ["#profile-info", "Profile"],
+            ["#appearance", "Appearance"],
+            ["#categories", "Categories"],
+            ...(profile.verified ? [["#directory", "Directory"]] as [string, string][] : []),
+            ["#username", "Username"],
+            ["#password", "Password"],
+          ] as [string, string][]).map(([href, label]) => (
+            <JumpNavLink key={href} href={href} label={label} />
+          ))}
+        </div>
+      </div>
+
+      {/* Profile picture */}
+      <div id="profile-picture" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Profile picture</h2>
         {session && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
@@ -298,6 +372,8 @@ export default function Settings() {
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                setAvatarUploading(true);
+                setAvatarError("");
                 const { blob, mimeType, dataUrl } = await resizeAndEncode(file);
                 setAvatarUrl(dataUrl);
                 const res = await fetch("/api/me/avatar", {
@@ -308,48 +384,75 @@ export default function Settings() {
                 const d = await res.json();
                 if (res.ok) {
                   setAvatarUrl(d.avatarUrl);
+                  triggerAvatarSuccess();
                   deleteCached(`/api/profile/${profile.username}`);
                   await loadSession();
                 } else {
                   setAvatarUrl(profile.avatarUrl ?? null);
+                  setAvatarError(d.error ?? "Upload failed.");
                 }
+                setAvatarUploading(false);
                 e.target.value = "";
               }}
             />
             <p style={{ textAlign: "center" }}>
-              <BlobButton type="button" blob="D" from="#ec4899" to="#0ea5e9" onClick={() => document.getElementById("avatar-upload")?.click()}>
-                {avatarUrl ? "Change photo" : "Upload photo"}
+              <BlobButton
+                type="button"
+                blob="D"
+                from="#ec4899"
+                to="#0ea5e9"
+                disabled={avatarUploading}
+                onClick={() => document.getElementById("avatar-upload")?.click()}
+              >
+                {avatarUploading ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
               </BlobButton>
             </p>
+            {avatarError && <p style={errorMsgStyle}>{avatarError}</p>}
+            {avatarSuccess && <p style={successMsgStyle}>Photo updated!</p>}
           </div>
         )}
       </div>
 
-      {/* Display name */}
-      <div className="settings-card">
-        <h2 style={{ textAlign: "center" }}>Display name</h2>
-        <form onSubmit={handleDisplayNameSubmit}>
+      {/* Profile info (display name + bio) */}
+      <div id="profile-info" className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Profile info</h2>
+        <form onSubmit={handleProfileInfoSubmit}>
           <label>
-            <span className="settings-label">Your public name (max 100 characters)</span>
+            <span className="settings-label">Display name (max 100 characters)</span>
             <input
               type="text"
               value={displayName}
               maxLength={100}
-              onChange={(e) => { setDisplayName(e.target.value); setDisplayNameSuccess(false); }}
+              onChange={(e) => setDisplayName(e.target.value)}
               required
             />
           </label>
           <div style={{ fontSize: "0.85rem", color: "#888", textAlign: "right", marginTop: "0.25rem" }}>{displayName.length}/100</div>
-          {displayNameError && <p style={{ textAlign: "center" }}><strong>{displayNameError}</strong></p>}
-          {displayNameSuccess && <p style={{ textAlign: "center" }}>Display name updated!</p>}
-          <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="G" disabled={displayNameSubmitting || !displayName.trim() || !displayNameDirty} from="#0ea5e9" to="#6366f1">Save display name</BlobButton>
+
+          <label style={{ marginTop: "1rem", display: "block" }}>
+            <span className="settings-label">Bio (max 300 characters)</span>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, 300))}
+              rows={4}
+              maxLength={300}
+              style={{ resize: "vertical" }}
+            />
+          </label>
+          <div style={{ fontSize: "0.85rem", color: "#888", textAlign: "right", marginTop: "0.25rem" }}>{bio.length}/300</div>
+
+          {profileInfoError && <p style={errorMsgStyle}>{profileInfoError}</p>}
+          {profileInfoSuccess && <p style={successMsgStyle}>Profile info saved!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0, marginTop: "0.75rem" }}>
+            <BlobButton blob="G" disabled={profileInfoSubmitting || !profileInfoDirty} from="#0ea5e9" to="#6366f1">
+              {profileInfoSubmitting ? "Saving…" : "Save profile info"}
+            </BlobButton>
           </p>
         </form>
       </div>
 
       {/* Unified appearance */}
-      <div className="settings-card">
+      <div id="appearance" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Profile appearance</h2>
         <form onSubmit={handleAppearanceSubmit}>
 
@@ -628,39 +731,16 @@ export default function Settings() {
             </div>
           )}
 
-          {appearanceError && <p style={{ textAlign: "center" }}><strong>{appearanceError}</strong></p>}
-          {appearanceSuccess && <p style={{ textAlign: "center" }}>Appearance saved!</p>}
+          {appearanceError && <p style={errorMsgStyle}>{appearanceError}</p>}
+          {appearanceSuccess && <p style={successMsgStyle}>Appearance saved!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
             <BlobButton blob="E" disabled={appearanceSubmitting || !appearanceDirty} from="#f78f1e" to="#ee3666">Save appearance</BlobButton>
           </p>
         </form>
       </div>
 
-      {/* Bio */}
-      <div className="settings-card">
-        <h2 style={{ textAlign: "center" }}>Bio</h2>
-        <form onSubmit={handleBioSubmit}>
-          <label>
-            <span className="settings-label">About you (max 300 characters)</span>
-            <textarea
-              value={bio}
-              onChange={(e) => { setBio(e.target.value.slice(0, 300)); setBioSuccess(false); }}
-              rows={4}
-              maxLength={300}
-              style={{ resize: "vertical" }}
-            />
-          </label>
-          <div style={{ fontSize: "0.85rem", color: "#888", textAlign: "right", marginTop: "0.25rem" }}>{bio.length}/300</div>
-          {bioError && <p style={{ textAlign: "center" }}><strong>{bioError}</strong></p>}
-          {bioSuccess && <p style={{ textAlign: "center" }}>Bio updated!</p>}
-          <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="F" disabled={bioSubmitting || !bioDirty} from="#9333ea" to="#e879b0">Save bio</BlobButton>
-          </p>
-        </form>
-      </div>
-
       {/* Categories */}
-      <div className="settings-card">
+      <div id="categories" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Categories</h2>
         <form onSubmit={handleCategorySubmit}>
           {/* Parent group buttons */}
@@ -732,8 +812,8 @@ export default function Settings() {
             );
           })()}
 
-          {categoryError && <p style={{ textAlign: "center" }}><strong>{categoryError}</strong></p>}
-          {categorySuccess && <p style={{ textAlign: "center" }}>Categories updated!</p>}
+          {categoryError && <p style={errorMsgStyle}>{categoryError}</p>}
+          {categorySuccess && <p style={successMsgStyle}>Categories updated!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
             <BlobButton blob="G" disabled={categorySubmitting || !categoriesDirty} from="#ffe100" to="#f78f1e">Save categories</BlobButton>
           </p>
@@ -742,28 +822,39 @@ export default function Settings() {
 
       {/* Directory visibility — verified users only */}
       {profile.verified && (
-        <div className="settings-card">
+        <div id="directory" className="settings-card">
           <h2 style={{ textAlign: "center" }}>Directory visibility</h2>
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
             <input
               type="checkbox"
-              checked={hideFromDirectory}
-              disabled={visibilitySubmitting}
-              onChange={(e) => handleVisibilityToggle(e.target.checked)}
+              checked={pendingHide}
+              onChange={(e) => setPendingHide(e.target.checked)}
               style={{ width: 16, height: 16, cursor: "pointer" }}
             />
             <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#555" }}>
               Hide me from the home page
             </span>
           </label>
-          {visibilitySuccess && (
-            <p style={{ textAlign: "center", marginTop: "0.75rem" }}>Saved!</p>
+          {visibilitySuccess && <p style={successMsgStyle}>Saved!</p>}
+          {pendingHide !== hideFromDirectory && (
+            <p style={{ textAlign: "center", marginBottom: 0, marginTop: "0.75rem" }}>
+              <BlobButton
+                type="button"
+                blob="E"
+                from="#a78bfa"
+                to="#56b0e3"
+                disabled={visibilitySubmitting}
+                onClick={() => handleVisibilityToggle(pendingHide)}
+              >
+                {visibilitySubmitting ? "Saving…" : "Save visibility"}
+              </BlobButton>
+            </p>
           )}
         </div>
       )}
 
       {/* Username */}
-      <div className="settings-card">
+      <div id="username" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Change username</h2>
         <p style={{ textAlign: "center", marginTop: 0 }}>Current: <strong>{profile.username}</strong></p>
         <form onSubmit={handleSubmit}>
@@ -784,8 +875,8 @@ export default function Settings() {
               {checkStatus === "invalid" && (validationError ?? "Invalid")}
             </div>
           )}
-          {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
-          {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
+          {error && <p style={errorMsgStyle}>{error}</p>}
+          {success && <p style={successMsgStyle}>Username updated to <strong>{username}</strong>!</p>}
           <p style={{ textAlign: "center", marginBottom: 0 }}>
             <BlobButton blob="B" disabled={!canSubmit} from="#00cfff" to="#4338ca">Update username</BlobButton>
           </p>
@@ -793,14 +884,14 @@ export default function Settings() {
       </div>
 
       {/* Password — shown for all users */}
-      <div className="settings-card">
+      <div id="password" className="settings-card">
         <h2 style={{ textAlign: "center" }}>Password</h2>
         {hasPassword ? (
           <>
             <p style={{ textAlign: "center", marginTop: 0, fontSize: "0.875rem", color: "#666" }}>
               We'll email you a link to set a new password.
             </p>
-            {resetLinkSent && <p style={{ textAlign: "center" }}>Check your email for a reset link!</p>}
+            {resetLinkSent && <p style={successMsgStyle}>Check your email for a reset link!</p>}
             <p style={{ textAlign: "center", marginBottom: 0 }}>
               <BlobButton
                 blob="A"
@@ -825,7 +916,7 @@ export default function Settings() {
                 <input
                   type="password"
                   value={newPassword}
-                  onChange={(e) => { setNewPassword(e.target.value); setPasswordSuccess(false); }}
+                  onChange={(e) => setNewPassword(e.target.value)}
                   required
                 />
               </label>
@@ -839,7 +930,7 @@ export default function Settings() {
                 <input
                   type="password"
                   value={confirmPassword}
-                  onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSuccess(false); }}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                 />
               </label>
@@ -848,8 +939,8 @@ export default function Settings() {
                   {newPassword === confirmPassword ? "✓ Matches" : "✗ Doesn't match"}
                 </div>
               )}
-              {passwordError && <p style={{ textAlign: "center" }}><strong>{passwordError}</strong></p>}
-              {passwordSuccess && <p style={{ textAlign: "center" }}>Password set! You can now sign in with your email and password.</p>}
+              {passwordError && <p style={errorMsgStyle}>{passwordError}</p>}
+              {passwordSuccess && <p style={successMsgStyle}>Password set! You can now sign in with your email and password.</p>}
               <p style={{ textAlign: "center", marginBottom: 0 }}>
                 <BlobButton
                   blob="A"

@@ -26,7 +26,8 @@ function mimeToExt(mime: string): string {
 
 function avatarUrl(assetId: string | null, origin: string): string | null {
   if (!assetId) return null;
-  return `${origin}/avatars/${assetId}`;
+  const key = assetId.startsWith("avatars/") ? assetId.slice("avatars/".length) : assetId;
+  return `${origin}/avatars/${key}`;
 }
 
 async function bustProfileCache(origin: string, username: string): Promise<void> {
@@ -386,7 +387,7 @@ app.post("/api/me/avatar", requireAuth, async (c) => {
   if (!existing) return c.json({ error: "Profile not found" }, 404);
   const oldKey: string | null = (existing.avatar_asset_id as string | null) ?? null;
   const ext = mimeToExt(mimeType);
-  const newKey = `avatars/${userId}/${Date.now()}.${ext}`;
+  const newKey = `${userId}/${Date.now()}.${ext}`;
   await c.env.AVATAR_BUCKET.put(newKey, body, { httpMetadata: { contentType: mimeType } });
   await sql`UPDATE public.profiles SET avatar_asset_id = ${newKey}, updated_at = now() WHERE user_id = ${userId}`;
   if (oldKey && oldKey !== newKey) {
@@ -1210,7 +1211,7 @@ app.get("/:username", async (c) => {
 
   // Use avatar when available; fall back to branded OG image
   const assetId = profile.avatar_asset_id as string | null;
-  const ogImage = assetId ? `https://loul.ink/avatars/${assetId}` : "https://loul.ink/og-image.jpg";
+  const ogImage = assetId ? avatarUrl(assetId, "https://loul.ink") : "https://loul.ink/og-image.jpg";
   const twitterCard = assetId ? "summary" : "summary_large_image";
 
   // JSON-LD structured data — Person or LocalBusiness based on categories

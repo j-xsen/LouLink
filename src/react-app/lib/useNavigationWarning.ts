@@ -1,8 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useBlocker } from "react-router-dom";
 
 export function useNavigationWarning(isDirty: boolean) {
-  const blocker = useBlocker(isDirty);
+  // POP navigations (browser back/forward) to history entries outside the router
+  // cannot be blocked — React Router warns and silently no-ops. Exclude them here;
+  // the beforeunload handler below covers the page-exit case instead.
+  const blocker = useBlocker(
+    useCallback(({ historyAction }: { historyAction: string }) => isDirty && historyAction !== "POP", [isDirty])
+  );
 
   useEffect(() => {
     if (blocker.state === "blocked") {
