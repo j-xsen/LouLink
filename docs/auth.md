@@ -71,6 +71,18 @@ const [profile] = await sql`
 if (!profile) return c.json({ error: "Profile not set up", code: "ONBOARDING_REQUIRED" }, 403);
 ```
 
+## Password Reset Flow
+
+Better Auth handles the full email-based reset flow — no custom Worker routes are needed.
+
+1. User visits `/forgot-password`, enters their email.
+2. The frontend calls `authClient.$fetch("/request-password-reset", { method: "POST", body: { email, redirectTo: ".../reset-password" } })`. Better Auth emails a time-limited reset link.
+3. The link lands on `/reset-password?token=<token>`. The page reads `?token` from the URL; if absent it shows an "invalid link" message.
+4. User submits a new password. The frontend calls `authClient.$fetch("/reset-password", { method: "POST", body: { newPassword, token } })`.
+5. On success, the user is redirected to `/signin` with a notice. On failure (expired token, etc.), an inline error is shown.
+
+Both pages carry `noindex` meta and are wrapped in `RedirectIfAuthed` (`/forgot-password` only — `/reset-password` is not, since a logged-in user with a valid token should still be able to reset).
+
 ## Authorization Rules
 
 - A user may only edit their own profile and links — compare `c.get("userId")` to the `profiles.user_id`
