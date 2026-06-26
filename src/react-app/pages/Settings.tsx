@@ -762,6 +762,36 @@ export default function Settings() {
         </div>
       )}
 
+      {/* Username */}
+      <div className="settings-card">
+        <h2 style={{ textAlign: "center" }}>Change username</h2>
+        <p style={{ textAlign: "center", marginTop: 0 }}>Current: <strong>{profile.username}</strong></p>
+        <form onSubmit={handleSubmit}>
+          <label>
+            <span className="settings-label">New username</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+              required
+            />
+          </label>
+          {changed && username && (
+            <div style={{ fontSize: "0.85rem", marginTop: "0.35rem", textAlign: "center" }}>
+              {checkStatus === "checking" && "Checking…"}
+              {checkStatus === "available" && "✓ Available"}
+              {checkStatus === "taken" && "✗ Taken"}
+              {checkStatus === "invalid" && (validationError ?? "Invalid")}
+            </div>
+          )}
+          {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
+          {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
+          <p style={{ textAlign: "center", marginBottom: 0 }}>
+            <BlobButton blob="B" disabled={!canSubmit} from="#00cfff" to="#4338ca">Update username</BlobButton>
+          </p>
+        </form>
+      </div>
+
       {/* Password — shown for all users */}
       <div className="settings-card">
         <h2 style={{ textAlign: "center" }}>Password</h2>
@@ -833,36 +863,6 @@ export default function Settings() {
             </form>
           </>
         )}
-      </div>
-
-      {/* Username */}
-      <div className="settings-card">
-        <h2 style={{ textAlign: "center" }}>Change username</h2>
-        <p style={{ textAlign: "center", marginTop: 0 }}>Current: <strong>{profile.username}</strong></p>
-        <form onSubmit={handleSubmit}>
-          <label>
-            <span className="settings-label">New username</span>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-              required
-            />
-          </label>
-          {changed && username && (
-            <div style={{ fontSize: "0.85rem", marginTop: "0.35rem", textAlign: "center" }}>
-              {checkStatus === "checking" && "Checking…"}
-              {checkStatus === "available" && "✓ Available"}
-              {checkStatus === "taken" && "✗ Taken"}
-              {checkStatus === "invalid" && (validationError ?? "Invalid")}
-            </div>
-          )}
-          {error && <p style={{ textAlign: "center" }}><strong>{error}</strong></p>}
-          {success && <p style={{ textAlign: "center" }}>Username updated to <strong>{username}</strong>!</p>}
-          <p style={{ textAlign: "center", marginBottom: 0 }}>
-            <BlobButton blob="B" disabled={!canSubmit} from="#00cfff" to="#4338ca">Update username</BlobButton>
-          </p>
-        </form>
       </div>
     </>
   );

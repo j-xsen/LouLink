@@ -164,7 +164,7 @@ export default function SignUp() {
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </label>
                 {showEmailNote && (
-                  <span style={{ fontSize: "0.85rem", display: "block", marginTop: "0.25rem", opacity: 0.7 }}>Only used if you need a one-time sign-in link.</span>
+                  <span style={{ fontSize: "0.85rem", display: "block", marginTop: "0.25rem", opacity: 0.7 }}>Only used if you ever need to reset your password.</span>
                 )}
                 {email && (
                   <span style={{ fontSize: "0.85rem", display: "block", marginTop: "0.25rem" }}>
