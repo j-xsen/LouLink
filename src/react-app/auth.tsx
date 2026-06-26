@@ -69,18 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadSession = useCallback(async () => {
     try {
-      await fetch(`${import.meta.env.VITE_AUTH_URL}/get-session`, { credentials: "include" });
-      const { data } = await authClient.getSession();
-      if (!data?.session) {
-        clearAuthSnapshot();
-        setSession(null);
-        setProfile(null);
-        setHasPassword(false);
-        setLoading(false);
-        return;
-      }
-      const jwt = await getJwt();
-      if (!jwt) {
+      const [{ data }, jwt] = await Promise.all([
+        authClient.getSession(),
+        getJwt().catch(() => null),
+      ]);
+      if (!data?.session || !jwt) {
         clearAuthSnapshot();
         setSession(null);
         setProfile(null);
