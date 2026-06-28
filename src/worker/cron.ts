@@ -20,7 +20,7 @@ export async function handleScheduled(_event: ScheduledEvent, env: Env): Promise
   // ---------------------------------------------------------------------------
   await sql`
     WITH src AS (
-      SELECT profile_id, country, city, browser, os, device_type, referrer, visit_kind, duration_ms
+      SELECT profile_id, country, city, browser, os, device_type, referrer, visit_kind, duration_ms, visitor_hash
       FROM public.page_view_events
       WHERE occurred_at >= ${day}::date
         AND occurred_at <  ${day}::date + interval '1 day'
