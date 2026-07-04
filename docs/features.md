@@ -124,7 +124,7 @@ Profile owners see a dashboard at `/analytics` showing views and link clicks ove
 
 **Tracking endpoints** (public, bot-filtered, self-view/self-click prevention via optional JWT auth):
 - `POST /api/track/view` — fired by ProfilePage on load; returns `eventId`
-- `POST /api/track/duration` — fired by ProfilePage via `navigator.sendBeacon` on unmount; updates `duration_ms` on the view event
+- `POST /api/track/duration` — fired by ProfilePage via `navigator.sendBeacon` on unmount; updates `duration_ms` on the view event (only if the caller's recomputed `visitor_hash` matches the event row)
 - `POST /api/track/click` — fired via `navigator.sendBeacon` when a link is clicked
 
 **Retention strategy:**

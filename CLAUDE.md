@@ -38,11 +38,11 @@ This is a full-stack app that runs entirely on Cloudflare Workers. The single Wo
 
 **Frontend layout (`src/react-app/`):**
 - `App.tsx` — router only
-- `auth.tsx` — AuthProvider, useAuth, route guards
+- `auth.tsx` — AuthProvider, route guards; `auth-context.ts` — AuthContext + useAuth hook
 - `types.ts` — shared TypeScript types + constants
-- `lib/` — cache, color, draft, seo, username utilities
-- `components/` — icons, ui (shapes/blobs), Avatar, Directory
-- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, Settings, ProfilePage, Analytics, AdminDashboard)
+- `lib/` — avatar, cache, color, draft, seo, username, useNavigationWarning utilities
+- `components/` — icons + icon-map, ui + blob-shapes, Avatar, Directory
+- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, ForgotPassword, ResetPassword, Settings, ProfilePage, Analytics, AdminDashboard)
 
 **How they connect:**
 

@@ -56,11 +56,11 @@ One row per authenticated user. Created during onboarding after first login.
 
 | Column | Type | Notes |
 |---|---|---|
-| `user_id` | `uuid` PRIMARY KEY | Matches `neon_auth.user.id` — no FK constraint (Neon Auth schema is externally managed) |
+| `user_id` | `uuid` PRIMARY KEY | Matches `neon_auth.users_sync.id` — no FK constraint (Neon Auth schema is externally managed) |
 | `username` | `text` UNIQUE NOT NULL | URL slug — `loulink.com/<username>`, 3–30 chars, lowercase alphanumeric with `-` and `_` |
 | `display_name` | `text` NOT NULL | Public name shown on profile and directory |
 | `bio` | `text` | Short description, max 300 chars |
-| `avatar_asset_id` | `text` | R2 object key (e.g. `avatars/<user_id>/<timestamp>.jpg`) — resolved to a URL via `https://loul.ink/avatars/<key>` |
+| `avatar_asset_id` | `text` | R2 object key (e.g. `<user_id>/<timestamp>.jpg`) — resolved to `<origin>/avatars/<key>` by `avatarUrl()`; legacy rows with an `avatars/` prefix are handled |
 | `categories` | `text[]` | Array of granular subcategory slugs. 25 valid values grouped under 5 parent labels — see category hierarchy in `docs/features.md`. Validated server-side in `PUT /api/me/categories`. Admin PATCH uses simplified 5-item parent slugs only. |
 | `verified` | `boolean` DEFAULT false | Admin-controlled Louisville verification flag |
 | `hide_from_directory` | `boolean` DEFAULT false | Verified users can opt out of the home page directory; only honoured when `verified = true` |
@@ -69,7 +69,7 @@ One row per authenticated user. Created during onboarding after first login.
 | `created_at` | `timestamptz` DEFAULT now() | |
 | `updated_at` | `timestamptz` DEFAULT now() | Auto-updated by trigger |
 
-Email is not stored here — read it by joining `neon_auth.user`.
+Email is not stored here — read it by joining `neon_auth.users_sync`.
 
 ### `public.links`
 
@@ -102,7 +102,7 @@ Raw analytics events. Rows are purged after 30 days by a nightly Cron Trigger (s
 | `device_type` | `text` | `desktop`, `mobile`, or `tablet` |
 | `referrer` | `text` | From `Referer` header, nullable |
 | `visit_kind` | `text` | `direct`, `social`, `search`, or `referral` — classified from referrer |
-| `duration_ms` | `integer` | Time on page in ms, sent via `navigator.sendBeacon` on unmount; capped at 4 hours |
+| `duration_ms` | `integer` | Time on page in ms, sent via `navigator.sendBeacon` on unmount; capped at 4 hours. Update requires the caller's recomputed `visitor_hash` to match the row (prevents polluting others' analytics via guessed event IDs) |
 | `visitor_hash` | `text` | SHA-256 of `IP:UserAgent` truncated to 32 hex chars — used to count distinct visitors; no PII stored |
 
 ### `public.page_view_daily`
@@ -196,12 +196,13 @@ JOIN neon_auth.users_sync u ON u.id = p.user_id
 WHERE p.username = $1 AND u.deleted_at IS NULL
 ```
 
-**Home page directory** — all verified profiles:
+**Home page directory** — all verified profiles (capped at 500 rows):
 ```sql
 SELECT username, display_name, bio, categories, avatar_asset_id
 FROM public.profiles
-WHERE verified = true
+WHERE verified = true AND hide_from_directory IS NOT TRUE
 ORDER BY display_name
+LIMIT 500
 ```
 
 **Profile links** — ordered for display (includes headers):

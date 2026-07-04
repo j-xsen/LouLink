@@ -17,21 +17,25 @@ src/
   react-app/              # React 19 SPA (compiled by Vite)
     main.tsx              # Entry point
     App.tsx               # Router only — routes + ScrollToTop + IndexRoute
-    auth.tsx              # AuthContext, AuthProvider, useAuth, route guards
+    auth.tsx              # AuthProvider + route guards (components only, for Vite fast refresh)
+    auth-context.ts       # AuthContext + useAuth hook (split out of auth.tsx)
     types.ts              # Shared TypeScript types + CATEGORY_LABELS constant
     index.css
     App.css
-    auth-client.ts        # Better Auth client SDK initialization
+    auth-client.ts        # Better Auth client SDK initialization + getJwt()
     lib/
-      cache.ts            # In-memory API response cache (getCached/setCached/deleteCached)
+      avatar.ts           # Client-side avatar validation limits + resizeAndEncode() (200px center-crop)
+      cache.ts            # localStorage-backed API response cache (getCached/setCached/deleteCached)
       color.ts            # autoTextColor(), extractDominantColor(), generateCardPalette()
       draft.ts            # localStorage link-builder draft (getDraft/saveDraft/clearDraft)
       seo.ts              # useSeo hook (document.title + noindex meta)
       username.ts         # validateUsername + useUsernameCheck (debounced availability check)
       useNavigationWarning.ts  # useNavigationWarning(isDirty) — blocks in-app navigation + beforeunload when form has unsaved changes
     components/
-      icons.tsx           # ICON_MAP, BRAND_COLORS, Icon, IconPicker
+      icons.tsx           # Icon, IconPicker components
+      icon-map.ts         # ICON_MAP + BRAND_COLORS registry (split out of icons.tsx)
       ui.tsx              # ShapeButton, PageHeader, ShapeTitle, BlobButton (shared shape-based UI)
+      blob-shapes.ts      # AVATAR_BLOB_SHAPES + BLOB_SHAPES SVG path data (split out of ui.tsx)
       Avatar.tsx          # AvatarImage, AvatarUpload
       Directory.tsx       # MemberCard, GroupedDirectory (home/dashboard member list)
     pages/
@@ -49,13 +53,14 @@ src/
     assets/               # SVG logos, shape blobs, brand icons
   worker/
     index.ts              # Hono app wiring — thin entrypoint (~40 lines), registers all route modules
-    analytics.ts          # isBot(), parseUserAgent(), classifyReferrer(), mergeJsonbCounts()
+    analytics.ts          # isBot(), parseUserAgent(), classifyReferrer(), computeVisitorHash(), mergeJsonbCounts()
     cron.ts               # handleScheduled() — nightly rollup aggregation + raw event purge
     auth.ts               # requireAuth, optionalAuth, requireAdmin middleware
     db.ts                 # createDb() — Neon postgres connection factory
     lib/
       constants.ts        # Shared validation constants: USERNAME_RE, UUID_RE, MAX_*, RESERVED_USERNAMES, ALLOWED_IMAGE_TYPES
-      utils.ts            # Shared helpers: mimeToExt, avatarUrl, bustProfileCache, sanitizeUrl, sanitizeItems, readJson, escHtml
+      utils.ts            # Shared helpers: mimeToExt, avatarUrl, bustProfileCache, sanitizeUrl, sanitizeItems, readJson, escHtml, escJsonForScript, isBlockedHost, safeFetch (SSRF guards)
+      csp.ts              # htmlCsp() — Content-Security-Policy string for HTML responses (optional per-request nonce)
     routes/
       me.ts               # All /api/me/* routes + /api/onboarding (auth-gated)
       profile.ts          # /api/profile/:username, /api/username/:username/available, /avatars/*, /api/directory
@@ -63,6 +68,8 @@ src/
       admin.ts            # /api/admin/* routes (requireAdmin)
       analytics.ts        # /api/track/view|duration|click, /api/me/analytics
       ssr.ts              # GET /:username — server-injects OG meta tags and performance hints into the SPA HTML
+scripts/
+  parse-lighthouse.mjs    # CLI — summarize a Lighthouse JSON report: node scripts/parse-lighthouse.mjs <report.json> [--category perf|a11y|seo|bp]
 ```
 
 ## Two Compilation Targets
@@ -109,11 +116,12 @@ POST /api/me/avatar                        → upload avatar to R2 (auth-gated)
 GET  /api/me/analytics                     → analytics dashboard data, ?period=7d|30d|90d|all (auth-gated)
 GET  /api/username/:username/available     → username availability check (public, rate-limited)
 GET  /api/profile/:username                → public profile + links (public, rate-limited)
-GET  /api/directory                        → all verified users, ordered by display_name (public, rate-limited)
+GET  /api/directory                        → all verified users, ordered by display_name, capped at 500 rows (public, rate-limited)
 GET  /api/og                               → fetch og:image from an external URL (public, OG_RATE_LIMITER)
+GET  /api/fetch-title                      → fetch a URL's <title> for link-editor auto-fill (public, OG_RATE_LIMITER)
 GET  /api/og-img                           → proxy-fetch an image server-side; adds UNAVATAR_API_KEY for unavatar.io (public, OG_RATE_LIMITER)
 POST /api/track/view                       → record a page view event (public, bot-filtered, self-view prevention)
-POST /api/track/duration                   → update duration_ms on an existing view event via sendBeacon; returns 204
+POST /api/track/duration                   → update duration_ms on an existing view event via sendBeacon; requires the caller's visitor_hash (recomputed from IP + User-Agent) to match the event row; returns 204
 POST /api/track/click                      → record a link click event (public, bot-filtered, self-click prevention)
 GET  /api/admin/users                      → list all profiles (requireAdmin)
 PATCH /api/admin/profiles/:username        → update verified flag and/or categories (requireAdmin)
@@ -138,9 +146,10 @@ The `GET /:username` route is handled by the Worker rather than the SPA fallback
 **OG / social meta tags** — `<title>`, `<meta name="description">`, all `og:*` and `twitter:*` tags, `<link rel="canonical">`, and a `<script type="application/ld+json">` block. Social crawlers (Twitter, Discord, Slack) don't run JavaScript, so these must be in the initial HTML.
 
 **Performance hints** (all injected at HTML-arrival time, before JS downloads):
-- `<link rel="preload" as="fetch" crossorigin href="/api/profile/:username">` — tells the browser to fire the profile API call immediately, in parallel with JS download. Without this, React must execute before it can issue the fetch, adding ~600ms on mobile.
 - `<link rel="preload" as="image" href="...">` — preloads the avatar so it starts downloading before React renders.
-- `<script>window.__PROFILE__ = {...}; window.__PROFILE_USER__ = "...";</script>` — if the profile JSON is already in the Worker Cache API (`caches.default`), the full data is embedded inline. `ProfilePage.tsx` reads `window.__PROFILE__` before issuing a fetch, skipping the API round trip entirely on repeat visits. JSON is XSS-safe: `<`, `>`, `&` are replaced with `<`, `>`, `&`.
+- `<script nonce="...">window.__PROFILE__ = {...}; window.__PROFILE_USER__ = "...";</script>` — if the profile JSON is already in the Worker Cache API (`caches.default`), the full data is embedded inline. `ProfilePage.tsx` reads `window.__PROFILE__` before issuing a fetch, skipping the API round trip entirely on repeat visits. JSON is XSS-safe via `escJsonForScript()`, which replaces `<`, `>`, `&` with their `\uXXXX` JSON escapes so user data can never break out of the script tag. The script carries a per-request CSP nonce — the route sets its own `Content-Security-Policy` header via `htmlCsp(nonce)`.
+
+Note: there is deliberately **no** `<link rel="preload" as="fetch">` for the profile API. `fetch()` uses `credentials: same-origin` but a `crossorigin` preload uses `credentials: omit` — the mismatched credential modes mean the preload is never reused, causing a double-fetch that hurts LCP. The `window.__PROFILE__` embed covers the warm-cache case instead.
 
 ## Build-time Performance Hints (`vite.config.ts`)
 
@@ -194,13 +203,28 @@ The SPA fallback in `wrangler.json` (`"not_found_handling": "single-page-applica
 1. Aggregates the previous day's raw events from `page_view_events` and `link_click_events` into their respective `_daily` rollup tables.
 2. Purges events older than 30 days from both raw event tables.
 
+## Security Middleware (`src/worker/index.ts` + `src/worker/lib/`)
+
+Three layers applied globally in `index.ts`:
+
+- **CORS (same-origin only)** — `hono/cors` on `/api/*` with a dynamic origin callback that only echoes the request's own origin. Browsers may not read API responses from any other origin; the API is consumed exclusively by the SPA.
+- **Secure headers** — `hono/secure-headers` on `/api/*`.
+- **CSP on all HTML** — a response middleware sets `Content-Security-Policy` (from `htmlCsp()` in `lib/csp.ts`) on every `text/html` response that doesn't already carry one. The SSR profile route sets its own nonce-bearing header first (for the inline `window.__PROFILE__` script), so the middleware only fills in the default. `script-src` allows `'self'`, the umami analytics origin, an `'unsafe-hashes'` sha256 for the font-preload `onload=""` handler in `index.html`, and the optional per-request nonce. If the `onload` handler in `index.html` changes, the hash in `csp.ts` must be recomputed. `style-src`/`img-src`/`connect-src` are deliberately unrestricted (inline styles everywhere; SPA talks to the external Neon Auth origin).
+
+**SSRF protection** (`lib/utils.ts`) — all server-side fetches of user-supplied URLs (`/api/og`, `/api/fetch-title`, `/api/og-img`) go through `safeFetch()`, which follows redirects manually and re-validates every hop with `isBlockedHost()` (loopback, link-local incl. cloud metadata, RFC-1918/CGNAT private ranges, IPv6 equivalents, `.local`/`.internal` hostnames). `sanitizeUrl()` also rejects blocked hosts at input-validation time.
+
 ## Rate Limiting
 
 Two Cloudflare Workers rate limiter bindings are configured in `wrangler.json` under `unsafe.bindings`:
 
 | Binding | Limit | Applied to |
 |---|---|---|
-| `OG_RATE_LIMITER` | 200 req/min | `GET /api/og`, `GET /api/og-img` |
+| `OG_RATE_LIMITER` | 200 req/min | `GET /api/og`, `GET /api/fetch-title`, `GET /api/og-img` |
 | `UNAUTHED_RATE_LIMITER` | 100 req/min | `GET /api/profile/:username`, `GET /api/directory`, `GET /api/username/:username/available` |
 
-These use the Cloudflare Workers rate limiting API (namespace IDs `1001` and `1002`). They are keyed per-IP automatically.
+These use the Cloudflare Workers rate limiting API (namespace IDs `1001` and `1002`), keyed by `CF-Connecting-IP` in each handler.
+
+## Caching
+
+- **Worker Cache API (`caches.default`)** — `GET /api/profile/:username` and `GET /api/directory` responses are cached at the edge (`s-maxage=86400`); `bustProfileCache()` in `lib/utils.ts` deletes both entries on any profile/link mutation. `/api/og-img` responses (including negative results) are also cached here.
+- **KV (`UNAVATAR_CACHE` binding)** — budget guard for unavatar.io fetches in `/api/og-img`: `miss:<url>` keys negative-cache failed lookups for 7 days, and `count:<YYYY-MM-DD>` enforces a 40-requests/day cap (below the unavatar 50/day plan limit).

@@ -25,10 +25,20 @@ wrangler secret put AUTH_JWKS_URL
 
 ## How It Works
 
-1. The React frontend uses the Better Auth client SDK (initialized with the Auth URL) to handle login/signup and obtain a JWT.
+1. The React frontend uses the Better Auth client SDK (initialized with the Auth URL) to handle login/signup and obtain a JWT via `getJwt()` in `src/react-app/auth-client.ts`.
 2. The frontend sends the JWT in the `Authorization: Bearer <token>` header on protected API calls.
 3. The Worker's `requireAuth` middleware verifies the JWT signature using the JWKS URL and extracts the user ID from the `sub` claim.
-4. On first login, the user exists in `neon_auth.user` but has no row in `public.profiles`. The app redirects them to `/onboarding` to pick a username and complete profile setup.
+4. On first login, the user exists in `neon_auth.users_sync` but has no row in `public.profiles`. The SignUp page (or CreatePage) completes profile setup via `POST /api/onboarding` — there is no `/onboarding` frontend route (see Onboarding Flow below).
+
+## Frontend Session Persistence
+
+The JWT is **never persisted** — it lives only in memory (an XSS could otherwise read it from localStorage and exfiltrate it). What localStorage holds is a display-only snapshot under `loulink_auth_v3`: `{ name, email, profile, exp }` — no token. On page load:
+
+1. The snapshot renders the signed-in UI instantly (stale-while-revalidate); `session.token` starts empty.
+2. `loadSession()` fetches a fresh JWT via `getJwt()` (authenticated by the Better Auth cookie) and verifies it with `GET /api/me`, skipping the slower `getSession()` chain.
+3. If no JWT comes back or `/api/me` returns 401, the full Neon Auth flow runs; failing that, the snapshot is cleared.
+
+Token-dependent fetches key their effects on `session?.token`, so nothing fires until the real JWT arrives. The old `loulink_auth_v2` key (which did persist the JWT) is purged on load.
 
 ## `requireAuth` Middleware
 
@@ -45,7 +55,7 @@ app.put("/api/profiles/:username", requireAuth, async (c) => {
 
 ## `optionalAuth` Middleware
 
-Also in `src/worker/auth.ts`. Like `requireAuth` but never rejects — if a valid JWT is present it sets `c.get("userId")`; if absent or invalid it sets it to `null`. Used on public analytics tracking routes so the handler can detect owner requests and drop self-views/self-clicks without blocking unauthenticated visitors.
+Also in `src/worker/auth.ts`. Like `requireAuth` but never rejects — if a valid JWT is present it sets `c.get("userId")`; if absent or invalid it leaves it unset (`c.get("userId")` returns `undefined`). Used on public analytics tracking routes so the handler can detect owner requests and drop self-views/self-clicks without blocking unauthenticated visitors.
 
 ```ts
 import { optionalAuth } from "./auth";

@@ -8,7 +8,7 @@ The app is deployed as a single Cloudflare Worker that serves both the API and t
 
 ```bash
 pnpm deploy
-# equivalent to: wrangler deploy
+# runs: tsc -b && vite build && wrangler deploy
 ```
 
 This builds the Worker and uploads it to Cloudflare. The `dist/client/` static assets are uploaded as part of the Worker bundle and served via Cloudflare's asset handling.
@@ -29,6 +29,7 @@ This builds the Worker and uploads it to Cloudflare. The `dist/client/` static a
     "not_found_handling": "single-page-application"
   },
   "r2_buckets": [{ "binding": "AVATAR_BUCKET", "bucket_name": "loulink-avatars" }],
+  "kv_namespaces": [{ "binding": "UNAVATAR_CACHE", "id": "…", "preview_id": "…" }],
   "triggers": { "crons": ["0 6 * * *"] },
   "unsafe": {
     "bindings": [
@@ -43,6 +44,7 @@ This builds the Worker and uploads it to Cloudflare. The `dist/client/` static a
 - `not_found_handling: single-page-application` returns `index.html` for any path not matching a static file, enabling React Router client-side navigation
 - `observability.enabled: true` turns on Cloudflare's built-in Worker analytics and logging
 - `triggers.crons` registers the nightly analytics cron (see Architecture docs)
+- `kv_namespaces` binds the `UNAVATAR_CACHE` KV namespace (unavatar.io miss-cache + daily budget counter — see `docs/storage.md`)
 - `unsafe.bindings` provisions the two rate limiter namespaces (Cloudflare Workers Rate Limiting API)
 
 ## Environment Variables & Secrets
