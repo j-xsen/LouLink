@@ -18,26 +18,31 @@ export function validateUsername(u: string): string | null {
   return null;
 }
 
-export function useUsernameCheck(username: string) {
-  const [status, setStatus] = useState<
-    "idle" | "checking" | "available" | "taken" | "invalid"
-  >("idle");
+export function useUsernameCheck(
+  username: string
+): "idle" | "checking" | "available" | "taken" | "invalid" {
+  // State holds only the async lookup result, tagged with the username it was
+  // fetched for; everything else derives from `username` at render time. The
+  // tag also prevents a stale response from showing for a newer username.
+  const [result, setResult] = useState<
+    { username: string; status: "available" | "taken" | "idle" } | null
+  >(null);
 
   useEffect(() => {
-    if (!username) { setStatus("idle"); return; }
-    if (validateUsername(username)) { setStatus("invalid"); return; }
-    setStatus("checking");
+    if (!username || validateUsername(username)) return;
     const id = setTimeout(async () => {
       try {
         const res = await fetch(`/api/username/${encodeURIComponent(username)}/available`);
         const d = await res.json();
-        setStatus(d.available ? "available" : "taken");
+        setResult({ username, status: d.available ? "available" : "taken" });
       } catch {
-        setStatus("idle");
+        setResult({ username, status: "idle" });
       }
     }, 350);
     return () => clearTimeout(id);
   }, [username]);
 
-  return status;
+  if (!username) return "idle";
+  if (validateUsername(username)) return "invalid";
+  return result?.username === username ? result.status : "checking";
 }

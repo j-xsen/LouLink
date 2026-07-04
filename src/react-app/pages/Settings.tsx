@@ -6,14 +6,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Link as LinkIcon } from "lucide-react";
 import { useNavigationWarning } from "../lib/useNavigationWarning";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { authClient } from "../auth-client";
 import { deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { autoTextColor, extractDominantColor, generateCardPalette } from "../lib/color";
 import { validateUsername, useUsernameCheck } from "../lib/username";
-import { PageHeader, ShapeTitle, BlobButton, AVATAR_BLOB_SHAPES } from "../components/ui";
-import { AvatarImage, resizeAndEncode } from "../components/Avatar";
+import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
+import { AVATAR_BLOB_SHAPES } from "../components/blob-shapes";
+import { AvatarImage } from "../components/Avatar";
+import { resizeAndEncode } from "../lib/avatar";
 import { CATEGORY_HIERARCHY, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
 
 const GROUP_COLORS: Record<string, string> = {

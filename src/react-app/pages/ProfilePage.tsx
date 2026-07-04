@@ -8,15 +8,28 @@ import { Link, useParams } from "react-router-dom";
 import { getCached, setCached, deleteCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { adaptTextColor, autoTextColor, generateCardPalette } from "../lib/color";
-import { Icon, BRAND_COLORS } from "../components/icons";
-import { AvatarImage, AvatarOverlay, resizeAndEncode } from "../components/Avatar";
+import { Icon } from "../components/icons";
+import { BRAND_COLORS } from "../components/icon-map";
+import { AvatarImage, AvatarOverlay } from "../components/Avatar";
+import { resizeAndEncode } from "../lib/avatar";
 import { CATEGORY_LABELS, THEMES, THEME_NAMES, HEADER_COLOR_PRESETS, AVATAR_SHAPES, parseAccentColor, type ProfileTheme, type AvatarShape } from "../types";
-import { AVATAR_BLOB_SHAPES } from "../components/ui";
-import { useAuth } from "../auth";
+import { AVATAR_BLOB_SHAPES } from "../components/blob-shapes";
+import { useAuth } from "../auth-context";
 
 type PublicItem =
   | { kind: "link"; id?: string; title: string; url: string; icon?: string }
   | { kind: "header"; title: string };
+// Link rows as the API returns them, before narrowing into PublicItem.
+type RawLink = { kind?: string; id?: string; title: string; url: string; icon?: string | null };
+type ProfilePayload = { profile: PublicProfile; links: RawLink[] };
+
+declare global {
+  interface Window {
+    // Injected by the Worker's SSR route for cached profiles.
+    __PROFILE__?: ProfilePayload | null;
+    __PROFILE_USER__?: string;
+  }
+}
 type PublicProfile = {
   username: string;
   display_name: string;
@@ -72,14 +85,13 @@ export default function ProfilePage() {
   // Use server-injected inline data (Worker embeds this for cached profiles) when
   // the in-memory cache is cold, e.g. on a hard page load or first visit.
   const serverInjected =
-    typeof window !== "undefined" &&
-    (window as any).__PROFILE_USER__ === username
-      ? ((window as any).__PROFILE__ as { profile: PublicProfile; links: any[] } | null)
+    typeof window !== "undefined" && window.__PROFILE_USER__ === username
+      ? (window.__PROFILE__ ?? null)
       : null;
-  const cachedProfile = getCached<{ profile: PublicProfile; links: any[] }>(cacheKey) ?? serverInjected;
+  const cachedProfile = getCached<ProfilePayload>(cacheKey) ?? serverInjected;
   const [profile, setProfile] = useState<PublicProfile | null>(cachedProfile?.profile ?? null);
   const [items, setItems] = useState<PublicItem[]>(() =>
-    cachedProfile ? (cachedProfile.links ?? []).map((l: any) => l.kind === "header"
+    cachedProfile ? (cachedProfile.links ?? []).map((l) => l.kind === "header"
       ? { kind: "header" as const, title: l.title }
       : { kind: "link" as const, id: l.id, title: l.title, url: l.url, icon: l.icon ?? undefined }
     ) : []
@@ -89,7 +101,9 @@ export default function ProfilePage() {
   const cardRefs = useRef<Map<string, Element>>(new Map());
 
   // Pending theme key for owner preview before saving
-  const themeInitialized = useRef(false);
+  // True once pending* theme state reflects the profile's accent_color. A
+  // cached profile seeds the useState initializers below, so it counts.
+  const themeInitialized = useRef(cachedProfile != null);
   const { themeKey: cachedTheme, headerColor: cachedHeader, monoSocial: cachedMono, avatarShape: cachedShape, cardColor: cachedCard, cardTextColor: cachedCardText } = parseAccentColor(cachedProfile?.profile?.accent_color ?? null);
   const [pendingKey, setPendingKey] = useState<string | null>(cachedTheme);
   const [pendingHeader, setPendingHeader] = useState<string | null>(cachedHeader);
@@ -171,10 +185,14 @@ export default function ProfilePage() {
     script.text = JSON.stringify(jsonLd);
     document.head.appendChild(script);
     return () => { document.getElementById("profile-jsonld")?.remove(); };
-  }, [profile?.username, status, seoDescription]);
+  }, [profile, status, seoDescription]);
+
+  // username is guaranteed by the /:username route; if it's ever absent,
+  // settle status during render rather than in the effect below.
+  if (!username && status !== "not-found") setStatus("not-found");
 
   useEffect(() => {
-    if (!username) { setStatus("not-found"); return; }
+    if (!username) return;
     // Skip the network fetch when the Worker already embedded fresh data in the HTML.
     // serverInjected is only non-null when window.__PROFILE_USER__ === username, so
     // SPA navigation to a different profile correctly re-fetches.
@@ -185,7 +203,7 @@ export default function ProfilePage() {
         if (!d?.profile) { setStatus("not-found"); return; }
         setCached(cacheKey, d);
         setProfile(d.profile);
-        setItems((d.links ?? []).map((l: any) => l.kind === "header"
+        setItems(((d.links ?? []) as RawLink[]).map((l) => l.kind === "header"
           ? { kind: "header", title: l.title }
           : { kind: "link", id: l.id, title: l.title, url: l.url, icon: l.icon ?? undefined }
         ));
@@ -202,21 +220,9 @@ export default function ProfilePage() {
         }
       })
       .catch(() => setStatus("not-found"));
-  }, [username]);
-
-  // Sync pendingKey once when cached profile is used
-  useEffect(() => {
-    if (profile && !themeInitialized.current) {
-      themeInitialized.current = true;
-      const { themeKey, headerColor, monoSocial, avatarShape, cardColor, cardTextColor } = parseAccentColor(profile.accent_color ?? null);
-      setPendingKey(themeKey);
-      setPendingHeader(headerColor);
-      setPendingMono(monoSocial);
-      setPendingShape(avatarShape);
-      setPendingCardColor(cardColor);
-      setPendingCardText(cardTextColor);
-    }
-  }, [profile]);
+    // cacheKey and serverInjected both derive solely from username (window
+    // globals never change after load), so this still re-runs only per profile.
+  }, [username, cacheKey, serverInjected]);
 
   useEffect(() => {
     const linkItems = items.filter((it): it is Extract<PublicItem, { kind: "link" }> => it.kind === "link");
@@ -251,7 +257,7 @@ export default function ProfilePage() {
     refs.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   // ogImages intentionally excluded — re-subscribing on every image load would re-observe already-done cards
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [items]);
 
   const isOwner = !!authProfile && authProfile.username === username;
@@ -285,6 +291,10 @@ export default function ProfilePage() {
         new Blob([JSON.stringify({ eventId, durationMs })], { type: "application/json" }),
       );
     };
+  // Deliberately narrowed: one tracked view per profile visit. Re-running when
+  // the session token arrives or the profile object is replaced (e.g. after a
+  // name edit) would fire the duration beacon early and double-count the view.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, status, profile?.username, isOwner]);
   const theme = resolveTheme({ themeKey: pendingKey, headerColor: pendingHeader, monoSocial: pendingMono, avatarShape: pendingShape, cardColor: pendingCardColor, cardTextColor: pendingCardText }, items);
   const { themeKey: savedKey, headerColor: savedHeader, monoSocial: savedMono, avatarShape: savedShape, cardColor: savedCardColor, cardTextColor: savedCardTextColor } = parseAccentColor(profile?.accent_color ?? null);

@@ -93,6 +93,7 @@ export function registerProfileRoutes(app: App): void {
       FROM public.profiles
       WHERE verified = true AND hide_from_directory IS NOT TRUE
       ORDER BY display_name
+      LIMIT 500
     `;
     const origin = new URL(c.req.url).origin;
     const members = rows.map((p) => ({

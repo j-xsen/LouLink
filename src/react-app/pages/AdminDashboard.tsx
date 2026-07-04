@@ -21,8 +21,13 @@ export default function AdminDashboard() {
   const isLocalhost =
     window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 
+  // VITE_ADMIN_KEY convenience fallback is dev-only: import.meta.env.DEV is
+  // statically false in production builds, so the minifier drops the branch and
+  // the key literal never ships in the client bundle.
   const [adminKey, setAdminKey] = useState(
-    () => sessionStorage.getItem("admin_key") || (import.meta.env.VITE_ADMIN_KEY as string | undefined) || ""
+    () =>
+      sessionStorage.getItem("admin_key") ||
+      (import.meta.env.DEV ? ((import.meta.env.VITE_ADMIN_KEY as string | undefined) ?? "") : "")
   );
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);

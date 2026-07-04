@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { ALLOWED_IMAGE_TYPES } from "../lib/constants";
-import { sanitizeUrl } from "../lib/utils";
+import { sanitizeUrl, safeFetch } from "../lib/utils";
 
 type App = Hono<{ Bindings: Env; Variables: { userId: string } }>;
 
@@ -75,10 +75,9 @@ export function registerOgRoutes(app: App): void {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         signal: controller.signal,
         headers: { "User-Agent": "LouLink/1.0 (+https://loul.ink)" },
-        redirect: "follow",
       });
       clearTimeout(timer);
       if (res.ok) {
@@ -130,10 +129,9 @@ export function registerOgRoutes(app: App): void {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         signal: controller.signal,
         headers: { "User-Agent": "LouLink/1.0 (+https://loul.ink)" },
-        redirect: "follow",
       });
       clearTimeout(timer);
       if (res.ok) {
@@ -179,7 +177,7 @@ export function registerOgRoutes(app: App): void {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(url, {
+      const res = await safeFetch(url, {
         signal: controller.signal,
         // cf.image is silently ignored if Cloudflare Image Resizing is not enabled on the account.
         cf: { image: { width: 800, height: 420, fit: "cover", format: "webp", quality: 85 } },
@@ -189,7 +187,6 @@ export function registerOgRoutes(app: App): void {
           "Origin": "https://loul.ink",
           ...(isUnavatar && c.env.UNAVATAR_API_KEY ? { "x-api-key": c.env.UNAVATAR_API_KEY } : {}),
         },
-        redirect: "follow",
       });
       clearTimeout(timer);
       if (!res.ok) return new Response("Not found", { status: 404 });

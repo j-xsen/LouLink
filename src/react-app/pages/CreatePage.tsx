@@ -5,13 +5,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Settings as SettingsIcon } from "lucide-react";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { deleteCached } from "../lib/cache";
 import { getDraft, saveDraft, clearDraft } from "../lib/draft";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
 import { PageHeader, ShapeTitle, BlobButton, DragHandle } from "../components/ui";
-import { Icon, IconPicker, BRAND_COLORS } from "../components/icons";
+import { Icon, IconPicker } from "../components/icons";
+import { BRAND_COLORS } from "../components/icon-map";
 import { useNavigationWarning } from "../lib/useNavigationWarning";
 import type { DraftItem, DraftHeader } from "../types";
 
@@ -69,14 +70,16 @@ export default function CreatePage() {
   const [savedItems, setSavedItems] = useState<DraftItem[]>([]);
   const [savedSocialLinks, setSavedSocialLinks] = useState<Record<string, string>>({});
 
-  // Existing users: fetch their current links from the server and use those
+  // Existing users: fetch their current links from the server and use those.
+  // Close over just the username so the effect re-runs only when it changes.
+  const profileUsername = profile?.username;
   useEffect(() => {
-    if (!profile) return;
-    fetch(`/api/profile/${encodeURIComponent(profile.username)}`)
+    if (!profileUsername) return;
+    fetch(`/api/profile/${encodeURIComponent(profileUsername)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (!d?.links) return;
-        const loaded: DraftItem[] = (d.links as any[]).map((l) =>
+        const loaded: DraftItem[] = (d.links as { kind?: string; title: string; url?: string; icon?: string | null }[]).map((l) =>
           l.kind === "header"
             ? { kind: "header" as const, title: l.title }
             : { kind: "link" as const, title: l.title, url: l.url ?? "", icon: l.icon ?? undefined }
@@ -88,7 +91,7 @@ export default function CreatePage() {
         setSavedSocialLinks(socials);
       })
       .catch(() => {});
-  }, [profile?.username]);
+  }, [profileUsername]);
   const hasChanges = profile != null && (
     JSON.stringify(items) !== JSON.stringify(savedItems) ||
     JSON.stringify(socialLinks) !== JSON.stringify(savedSocialLinks)
@@ -102,6 +105,8 @@ export default function CreatePage() {
   useEffect(() => {
     if (pendingNavigate && !hasChanges) {
       navigate("/");
+      // Reset the flag in case navigation is blocked and we stay mounted.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingNavigate(false);
     }
   }, [pendingNavigate, hasChanges, navigate]);
@@ -183,6 +188,15 @@ export default function CreatePage() {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const pointerYRef = useRef<number>(0);
   const dragIndex = drag?.index ?? null;
+
+  function moveItem(from: number, to: number) {
+    setItems(prev => {
+      const next = [...prev];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      if (!profile) saveDraft({ items: next });
+      return next;
+    });
+  }
 
   function startDrag(e: React.PointerEvent, i: number) {
     e.preventDefault();
@@ -307,15 +321,6 @@ export default function CreatePage() {
       return merged;
     });
     updateItems(next);
-  }
-
-  function moveItem(from: number, to: number) {
-    setItems(prev => {
-      const next = [...prev];
-      next.splice(to, 0, next.splice(from, 1)[0]);
-      if (!profile) saveDraft({ items: next });
-      return next;
-    });
   }
 
   const fieldLabel: React.CSSProperties = {

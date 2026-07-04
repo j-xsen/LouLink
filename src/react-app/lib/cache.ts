@@ -16,9 +16,9 @@ export function getCached<T>(key: string): T | null {
 }
 
 export function setCached(key: string, data: unknown) {
-  try { localStorage.setItem(PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch {}
+  try { localStorage.setItem(PREFIX + key, JSON.stringify({ data, ts: Date.now() })); } catch { /* storage full or unavailable — cache is best-effort */ }
 }
 
 export function deleteCached(key: string) {
-  try { localStorage.removeItem(PREFIX + key); } catch {}
+  try { localStorage.removeItem(PREFIX + key); } catch { /* storage unavailable */ }
 }

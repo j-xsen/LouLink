@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authClient } from "../auth-client";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { useSeo } from "../lib/seo";
 import { PageHeader, ShapeTitle, BlobButton } from "../components/ui";
 

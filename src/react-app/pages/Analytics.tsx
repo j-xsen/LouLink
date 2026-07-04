@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { useSeo } from "../lib/seo";
 
 type Period = "7d" | "30d" | "90d" | "all";
@@ -132,10 +132,20 @@ export default function Analytics() {
 
   useSeo({ title: "Analytics | LouLink" });
 
+  // Reset loading/error whenever the fetch inputs change — done during render
+  // (not in the effect) so the spinner shows on the very same pass.
+  const fetchKey = session?.token ? `${period}:${session.token}` : null;
+  const [prevFetchKey, setPrevFetchKey] = useState<string | null>(null);
+  if (fetchKey !== prevFetchKey) {
+    setPrevFetchKey(fetchKey);
+    if (fetchKey) {
+      setLoading(true);
+      setError(false);
+    }
+  }
+
   useEffect(() => {
-    if (!session) return;
-    setLoading(true);
-    setError(false);
+    if (!session?.token) return;
     fetch(`/api/me/analytics?period=${period}`, {
       headers: { Authorization: `Bearer ${session.token}` },
     })

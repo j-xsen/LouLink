@@ -2,9 +2,10 @@
 // Auth context, provider, hooks, and route guards
 // ---------------------------------------------------------------------------
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { authClient, getJwt } from "./auth-client";
+import { AuthContext, useAuth } from "./auth-context";
 import { clearDraft } from "./lib/draft";
 import type { SessionData, ProfileData } from "./types";
 
@@ -13,11 +14,17 @@ import type { SessionData, ProfileData } from "./types";
 // skip the loading screen entirely on page refresh.
 // TTL is derived from the JWT's own exp claim so the cache is valid for the
 // full token lifetime rather than an arbitrary constant.
+// The JWT itself is never persisted — any XSS could read localStorage and
+// exfiltrate it. The snapshot holds only display data; the token lives in
+// memory and is re-fetched via getJwt() (cookie-authenticated) on page load.
 // ---------------------------------------------------------------------------
 
-const AUTH_KEY = "loulink_auth_v2";
+const AUTH_KEY = "loulink_auth_v3";
 
-type AuthSnapshot = { token: string; name: string; email: string; profile: ProfileData | null; exp: number };
+// Purge the v2 snapshot, which persisted the JWT itself.
+try { localStorage.removeItem("loulink_auth_v2"); } catch { /* SSR/privacy mode */ }
+
+type AuthSnapshot = { name: string; email: string; profile: ProfileData | null; exp: number };
 
 function jwtExp(token: string): number | null {
   try {
@@ -31,7 +38,7 @@ function readAuthSnapshot(): AuthSnapshot | null {
     const raw = localStorage.getItem(AUTH_KEY);
     if (!raw) return null;
     const snap = JSON.parse(raw) as AuthSnapshot;
-    // Expire 60s before the JWT itself expires so we never hand the Worker a stale token.
+    // Snapshot lifetime tracks the JWT's exp so we never render stale auth UI.
     if (Date.now() >= (snap.exp - 60) * 1000) { localStorage.removeItem(AUTH_KEY); return null; }
     return snap;
   } catch { return null; }
@@ -41,61 +48,47 @@ function writeAuthSnapshot(token: string, name: string, email: string, profile: 
   try {
     const exp = jwtExp(token);
     if (!exp) return;
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ token, name, email, profile, exp }));
-  } catch {}
+    localStorage.setItem(AUTH_KEY, JSON.stringify({ name, email, profile, exp }));
+  } catch { /* storage full or unavailable — snapshot is best-effort */ }
 }
 
 function clearAuthSnapshot() {
-  try { localStorage.removeItem(AUTH_KEY); } catch {}
+  try { localStorage.removeItem(AUTH_KEY); } catch { /* storage unavailable */ }
 }
-
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-
-type AuthContextType = {
-  loading: boolean;
-  session: SessionData | null;
-  profile: ProfileData | null;
-  loadSession: () => Promise<void>;
-  signOut: () => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextType>({
-  loading: true,
-  session: null,
-  profile: null,
-  loadSession: async () => {},
-  signOut: async () => {},
-});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const snap = readAuthSnapshot();
   const [loading, setLoading] = useState(!snap);
+  // Optimistic session from the snapshot renders the signed-in UI instantly;
+  // token starts empty and is filled in by loadSession() before any
+  // token-dependent fetch fires (effects key on session?.token).
   const [session, setSession] = useState<SessionData | null>(
-    snap ? { token: snap.token, name: snap.name, email: snap.email ?? "" } : null
+    snap ? { token: "", name: snap.name, email: snap.email ?? "" } : null
   );
   const [profile, setProfile] = useState<ProfileData | null>(snap?.profile ?? null);
 
   const loadSession = useCallback(async () => {
     try {
-      // Fast path: if we have a cached token, verify it with /api/me directly —
-      // skips the Neon auth chain (get-session → token) on every return visit.
+      // Fast path: snapshot means we were signed in recently — fetch a fresh
+      // JWT via the auth cookie and verify with /api/me, skipping getSession().
       const cached = readAuthSnapshot();
       if (cached) {
-        const meRes = await fetch("/api/me", {
-          headers: { Authorization: `Bearer ${cached.token}` },
-        });
-        if (meRes.ok) {
-          const d = await meRes.json();
-          const p: ProfileData | null = d.profile ?? null;
-          setSession({ token: cached.token, name: cached.name, email: cached.email });
-          setProfile(p);
-          writeAuthSnapshot(cached.token, cached.name, cached.email, p);
-          setLoading(false);
-          return;
+        const jwt = await getJwt().catch(() => null);
+        if (jwt) {
+          const meRes = await fetch("/api/me", {
+            headers: { Authorization: `Bearer ${jwt}` },
+          });
+          if (meRes.ok) {
+            const d = await meRes.json();
+            const p: ProfileData | null = d.profile ?? null;
+            setSession({ token: jwt, name: cached.name, email: cached.email });
+            setProfile(p);
+            writeAuthSnapshot(jwt, cached.name, cached.email, p);
+            setLoading(false);
+            return;
+          }
         }
-        // 401 means the JWT expired — fall through to the full Neon auth flow.
+        // No JWT or 401 — auth session gone; fall through to the full flow.
         clearAuthSnapshot();
         setSession(null);
         setProfile(null);
@@ -162,6 +155,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Auth bootstrap syncs with an external system (Neon Auth); every setState
+    // inside loadSession happens after an await, never synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSession();
   }, [loadSession]);
 
@@ -170,10 +166,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }
 
 // ---------------------------------------------------------------------------

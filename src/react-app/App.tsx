@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createBrowserRouter, Outlet, RouterProvider, useLocation, useSearchParams } from "react-router-dom";
-import { AuthProvider, RedirectIfAuthed, RequireProfile, useAuth } from "./auth";
+import { AuthProvider, RedirectIfAuthed, RequireProfile } from "./auth";
+import { useAuth } from "./auth-context";
 import Home from "./pages/Home";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
@@ -51,7 +52,13 @@ function ErrorBanner() {
   const errorCode = searchParams.get("error");
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => { setDismissed(false); }, [errorCode]);
+  // Re-show the banner when a new ?error= code arrives — adjust state during
+  // render instead of in an effect (avoids an extra committed render pass).
+  const [prevCode, setPrevCode] = useState(errorCode);
+  if (prevCode !== errorCode) {
+    setPrevCode(errorCode);
+    setDismissed(false);
+  }
 
   if (!errorCode || dismissed) return null;
 

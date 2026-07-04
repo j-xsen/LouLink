@@ -1,7 +1,8 @@
 import type { Hono } from "hono";
 import { createDb } from "../db";
 import { USERNAME_RE } from "../lib/constants";
-import { avatarUrl, escHtml } from "../lib/utils";
+import { avatarUrl, escHtml, escJsonForScript } from "../lib/utils";
+import { htmlCsp } from "../lib/csp";
 
 type App = Hono<{ Bindings: Env; Variables: { userId: string } }>;
 
@@ -70,7 +71,7 @@ export function registerSsrRoutes(app: App): void {
     const twitterCard = assetId ? "summary" : "summary_large_image";
 
     const isBusiness = rawCategories.some((cat) => BUSINESS_CATEGORIES.has(cat));
-    const jsonLd = {
+    const jsonLd: Record<string, unknown> = {
       "@context": "https://schema.org",
       "@type": isBusiness ? "LocalBusiness" : "Person",
       "name": displayName,
@@ -92,17 +93,15 @@ export function registerSsrRoutes(app: App): void {
       : "";
 
     // Embed full profile data from Worker Cache API so React skips the API call entirely.
+    // The inline script carries a per-request CSP nonce; without it, script-src blocks it.
+    const cspNonce = crypto.randomUUID();
     let profileDataScript = "";
     try {
       const profileCacheKey = `${new URL(c.req.url).origin}/api/profile/${username}`;
       const profileCached = await caches.default.match(profileCacheKey);
       if (profileCached?.ok) {
         const rawData = await profileCached.json();
-        const safeJson = JSON.stringify(rawData)
-          .replace(/</g, "\\u003c")
-          .replace(/>/g, "\\u003e")
-          .replace(/&/g, "\\u0026");
-        profileDataScript = `<script>window.__PROFILE__=${safeJson};window.__PROFILE_USER__=${JSON.stringify(username)};</script>`;
+        profileDataScript = `<script nonce="${cspNonce}">window.__PROFILE__=${escJsonForScript(rawData)};window.__PROFILE_USER__=${escJsonForScript(username)};</script>`;
       }
     } catch { /* cache miss or malformed — skip embedding */ }
 
@@ -121,14 +120,17 @@ export function registerSsrRoutes(app: App): void {
       `<meta name="twitter:description" content="${escHtml(description)}">`,
       `<meta name="twitter:image" content="${escHtml(ogImage)}">`,
       `<link rel="canonical" href="${escHtml(url)}">`,
-      `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
+      `<script type="application/ld+json">${escJsonForScript(jsonLd)}</script>`,
       avatarPreloadLink,
       profileDataScript,
     ].filter(Boolean).join("\n\t\t");
 
-    return new HTMLRewriter()
+    const rewritten = new HTMLRewriter()
       .on("title", { element(el) { el.remove(); } })
       .on("head", { element(el) { el.prepend(injected, { html: true }); } })
       .transform(assetResp);
+    const res = new Response(rewritten.body, rewritten);
+    res.headers.set("Content-Security-Policy", htmlCsp(cspNonce));
+    return res;
   });
 }

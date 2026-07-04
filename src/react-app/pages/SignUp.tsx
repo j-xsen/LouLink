@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authClient, getJwt } from "../auth-client";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { clearDraft } from "../lib/draft";
 import type { DraftItem } from "../types";
 import { useSeo } from "../lib/seo";

@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Settings as SettingsIcon } from "lucide-react";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { getCached, setCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { ShapeButton } from "../components/ui";

@@ -59,11 +59,15 @@ export function registerAnalyticsRoutes(app: App): void {
       return new Response(null, { status: 204 });
 
     const durationMs = Math.min(Math.round(rawMs), 14_400_000);
+    // Only the visitor who produced the view may set its duration: recompute
+    // their hash and require it to match the event row, so a guessed/leaked
+    // event UUID can't be used to pollute someone else's analytics.
+    const visitorHash = await computeVisitorHash(ip, c.req.header("User-Agent") ?? "");
     const sql = createDb(c.env.DATABASE_URL);
     await sql`
       UPDATE public.page_view_events
       SET duration_ms = ${durationMs}
-      WHERE id = ${eventId} AND duration_ms IS NULL
+      WHERE id = ${eventId} AND duration_ms IS NULL AND visitor_hash = ${visitorHash}
     `;
     return new Response(null, { status: 204 });
   });

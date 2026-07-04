@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth";
+import { useAuth } from "../auth-context";
 import { getCached, setCached } from "../lib/cache";
 import { useSeo } from "../lib/seo";
 import { ShapeButton } from "../components/ui";
