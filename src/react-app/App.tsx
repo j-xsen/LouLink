@@ -3,6 +3,7 @@ import { createBrowserRouter, Outlet, RouterProvider, useLocation, useSearchPara
 import { AuthProvider, RedirectIfAuthed, RequireProfile } from "./auth";
 import { useAuth } from "./auth-context";
 import Home from "./pages/Home";
+import Footer from "./components/Footer";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 const CreatePage = lazy(() => import("./pages/CreatePage"));
@@ -14,6 +15,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 
 // ---------------------------------------------------------------------------
 // ScrollToTop
@@ -89,6 +91,7 @@ function Root() {
       <main>
         <Outlet />
       </main>
+      <Footer />
     </AuthProvider>
   );
 }
@@ -110,6 +113,7 @@ const router = createBrowserRouter([
       { path: "/settings", element: <RequireProfile><Suspense><Settings /></Suspense></RequireProfile> },
       { path: "/analytics", element: <RequireProfile><Suspense><Analytics /></Suspense></RequireProfile> },
       { path: "/admin", element: <Suspense><AdminDashboard /></Suspense> },
+      { path: "/privacy", element: <Suspense><Privacy /></Suspense> },
       { path: "/:username", element: <Suspense><ProfilePage /></Suspense> },
     ],
   },

@@ -3,8 +3,7 @@
 //
 // script-src allows:
 //   - 'self'                     — Vite-built bundles
-//   - the umami origin           — analytics <script> in index.html
-//   - the jxsen tracker origin   — second analytics <script> in index.html
+//   - the jxsen tracker origin   — analytics <script> in index.html
 //   - 'unsafe-hashes' + sha256   — the font-preload onload="" handler in index.html
 //                                  (hash of: this.onload=null;this.rel='stylesheet')
 //   - an optional per-request nonce — SSR-injected window.__PROFILE__ script
@@ -19,13 +18,11 @@
 // ---------------------------------------------------------------------------
 
 const FONT_ONLOAD_HASH = "'sha256-1jAmyYXcRq6zFldLe/GCgIDJBiOONdXjTLgEFMDnDSM='";
-const UMAMI_ORIGIN = "https://umami-psi-inky.vercel.app";
 const JWS_TRACKER_ORIGIN = "https://web.jxsen.com";
 
 export function htmlCsp(nonce?: string): string {
   const scriptSrc = [
     "'self'",
-    UMAMI_ORIGIN,
     JWS_TRACKER_ORIGIN,
     "'unsafe-hashes'",
     FONT_ONLOAD_HASH,
