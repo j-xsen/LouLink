@@ -24,9 +24,18 @@ export default function Privacy() {
         </p>
         <p>
           When you set up your profile, we store what you enter: username, display name, bio, social
-          links, category tags, and accent color. Avatar images you upload are stored in Cloudflare R2.
-          If you import an avatar from a social profile instead, we fetch it through a third-party
-          image service (unavatar.io).
+          links, category tags, and accent color. Avatar images you upload are stored in{" "}
+          <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">
+            Cloudflare R2
+          </a>.
+        </p>
+        <p>
+          When you add a link to an Instagram, Twitter/X, or TikTok profile, we fetch that platform's
+          avatar through a third-party image service (
+          <a href="https://unavatar.io" target="_blank" rel="noopener noreferrer">
+            unavatar.io
+          </a>
+          ) and proxy it through our server to show a thumbnail on your link card.
         </p>
 
         <h2>Analytics on your LouLink page</h2>
@@ -45,13 +54,20 @@ export default function Privacy() {
 
         <h2>Third-party analytics</h2>
         <p>
-          We use a cookie-free analytics tool (hosted at web.jxsen.com) on every LouLink page to
+          We use a cookie-free analytics tool (hosted at{" "}
+          <a href="https://web.jxsen.com" target="_blank" rel="noopener noreferrer">
+            web.jxsen.com
+          </a>
+          ) on every LouLink page to
           understand overall site traffic. It does not use cookies and does not track you across other
           websites.
         </p>
         <p>
-          We also load fonts from Google Fonts, which may see your IP address when your browser
-          requests them.
+          We also load fonts from{" "}
+          <a href="https://developers.google.com/fonts/faq/privacy" target="_blank" rel="noopener noreferrer">
+            Google Fonts
+          </a>
+          , which may see your IP address when your browser requests them.
         </p>
 
         <h2>How we use your data</h2>
