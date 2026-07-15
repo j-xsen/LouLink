@@ -1,7 +1,7 @@
-diff --git a/dist/index.mjs b/dist/index.mjs
-index 144259f5e5e076c55aa7d4f9bbe365bbe80c0fe6..e7f53e4de0fa601e127e74757f48fa7e9a747816 100644
---- a/dist/index.mjs
-+++ b/dist/index.mjs
+diff --git a/node_modules/@cloudflare/vite-plugin/dist/index.mjs b/node_modules/@cloudflare/vite-plugin/dist/index.mjs
+index 144259f..e7f53e4 100644
+--- a/node_modules/@cloudflare/vite-plugin/dist/index.mjs
++++ b/node_modules/@cloudflare/vite-plugin/dist/index.mjs
 @@ -13968,7 +13968,8 @@ function getLocalDevVarsForPreview(configPath, cloudflareEnv) {
  	const dotDevDotVars = unstable_getVarsForDev(configPath, void 0, {}, cloudflareEnv);
  	const dotDevDotVarsEntries = Array.from(Object.entries(dotDevDotVars));

@@ -35,6 +35,7 @@
 		"eslint-plugin-react-hooks": "7.0.1",
 		"eslint-plugin-react-refresh": "0.4.24",
 		"globals": "16.5.0",
+		"patch-package": "^8.0.1",
 		"typescript": "5.9.3",
 		"typescript-eslint": "8.48.0",
 		"vite": "^7.3.5",
@@ -48,6 +49,7 @@
 		"deploy": "tsc -b && vite build && wrangler deploy",
 		"dev": "vite",
 		"lint": "eslint .",
+		"postinstall": "patch-package",
 		"preview": "npm run build && vite preview"
 	},
 	"type": "module"
