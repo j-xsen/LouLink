@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/;
 const RESERVED_USERNAMES = new Set([
   "api", "avatars", "signin", "signup", "create", "settings", "analytics", "admin",
+  "dashboard", "forgot-password", "reset-password", "privacy",
 ]);
 
 export function validateUsername(u: string): string | null {

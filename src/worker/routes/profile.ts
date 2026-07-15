@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { createDb } from "../db";
-import { USERNAME_RE } from "../lib/constants";
+import { USERNAME_RE, RESERVED_USERNAMES } from "../lib/constants";
 import { avatarUrl } from "../lib/utils";
 
 type App = Hono<{ Bindings: Env; Variables: { userId: string } }>;
@@ -12,9 +12,6 @@ export function registerProfileRoutes(app: App): void {
     if (!success) return c.json({ error: "Too many requests" }, 429);
     const username = c.req.param("username").toLowerCase();
     if (!USERNAME_RE.test(username)) return c.json({ available: false, reason: "invalid" });
-    const RESERVED_USERNAMES = new Set([
-      "api", "avatars", "signin", "signup", "create", "settings", "analytics", "admin",
-    ]);
     if (RESERVED_USERNAMES.has(username)) return c.json({ available: false, reason: "reserved" });
     const sql = createDb(c.env.DATABASE_URL);
     const [row] = await sql`SELECT 1 FROM public.profiles WHERE username = ${username} LIMIT 1`;

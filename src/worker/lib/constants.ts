@@ -9,6 +9,7 @@ export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 export const RESERVED_USERNAMES = new Set([
   "api", "avatars", "signin", "signup", "create", "settings", "analytics", "admin",
+  "dashboard", "forgot-password", "reset-password", "privacy",
 ]);
 
 export const ALLOWED_IMAGE_TYPES = new Set([
