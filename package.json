@@ -50,10 +50,5 @@
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview"
 	},
-	"type": "module",
-	"pnpm": {
-		"patchedDependencies": {
-			"@cloudflare/vite-plugin@1.15.3": "patches/@cloudflare__vite-plugin@1.15.3.patch"
-		}
-	}
+	"type": "module"
 }
