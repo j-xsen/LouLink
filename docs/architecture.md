@@ -50,6 +50,7 @@ src/
       ProfilePage.tsx     # Public /:username profile page — fires view/duration/click beacons
       Analytics.tsx       # /analytics dashboard — stat cards, bar charts, link performance table
       AdminDashboard.tsx  # /admin — localhost-only admin panel, ADMIN_KEY bearer auth
+      Privacy.tsx         # /privacy — static privacy policy page
     assets/               # SVG logos, shape blobs, brand icons
   worker/
     index.ts              # Hono app wiring — thin entrypoint (~40 lines), registers all route modules
@@ -190,6 +191,7 @@ React Router handles client-side navigation. Routes:
 /settings  → Settings: avatar, display name, bio, profile appearance (theme/colors/avatar shape/social icon toggle), categories, directory visibility, username change (RequireProfile guard)
 /analytics → Analytics: views/clicks dashboard (RequireProfile guard)
 /admin     → AdminDashboard: localhost-only admin panel (hostname check inside component; no route guard)
+/privacy   → Privacy: static privacy policy page
 /:username → ProfilePage: public profile
 ```
 

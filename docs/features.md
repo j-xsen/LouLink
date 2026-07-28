@@ -136,6 +136,10 @@ Profile owners see a dashboard at `/analytics` showing views and link clicks ove
 
 **What's tracked per link click:** `link_id`, `profile_id`, `timestamp`, `country`, `referrer`, `visit_kind`.
 
+### Privacy Policy (`/privacy`)
+
+Static page (`src/react-app/pages/Privacy.tsx`) describing what's collected (account/profile data, analytics events, third-party services used) and how to request data/account deletion. No auth required.
+
 ## Post-MVP
 
 These features are explicitly out of scope until the MVP is stable.

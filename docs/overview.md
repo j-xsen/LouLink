@@ -23,10 +23,10 @@ LouLink is a Louisville-specific competitor to Linktree. It gives Louisville art
 1. Sign up with email or OAuth
 2. Submit Louisville verification (address, social proof, or manual review)
 3. Build their link page: add name, bio, profile photo, and links
-4. Page goes live at `loulink.com/<username>`
+4. Page goes live at `loul.ink/<username>`
 
 ### Visitor (Discovery)
-1. Lands on `loulink.com` — sees the full Louisville directory
+1. Lands on `loul.ink` — sees the full Louisville directory
 2. Browses or searches by category/name
 3. Clicks a profile → sees that person's link page
 4. Clicks a link → leaves to external site

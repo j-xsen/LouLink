@@ -57,7 +57,7 @@ One row per authenticated user. Created during onboarding after first login.
 | Column | Type | Notes |
 |---|---|---|
 | `user_id` | `uuid` PRIMARY KEY | Matches `neon_auth.users_sync.id` — no FK constraint (Neon Auth schema is externally managed) |
-| `username` | `text` UNIQUE NOT NULL | URL slug — `loulink.com/<username>`, 3–30 chars, lowercase alphanumeric with `-` and `_` |
+| `username` | `text` UNIQUE NOT NULL | URL slug — `loul.ink/<username>`, 3–30 chars, lowercase alphanumeric with `-` and `_` |
 | `display_name` | `text` NOT NULL | Public name shown on profile and directory |
 | `bio` | `text` | Short description, max 300 chars |
 | `avatar_asset_id` | `text` | R2 object key (e.g. `<user_id>/<timestamp>.jpg`) — resolved to `<origin>/avatars/<key>` by `avatarUrl()`; legacy rows with an `avatars/` prefix are handled |

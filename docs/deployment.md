@@ -93,7 +93,7 @@ Streams live Worker logs (console.log, errors, request traces) to your terminal.
 
 ## Custom Domain
 
-In the Cloudflare dashboard, assign a custom domain (e.g., `loulink.com`) to the Worker under Workers & Pages → your worker → Settings → Domains & Routes.
+In the Cloudflare dashboard, assign a custom domain (`loul.ink`) to the Worker under Workers & Pages → your worker → Settings → Domains & Routes.
 
 ## Build Output
 

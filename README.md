@@ -25,7 +25,7 @@ Unlike Linktree, LouLink is **Louisville-only**. Every user must be verified as 
 | Frontend | React 19, TypeScript, Vite |
 | Backend | Hono on Cloudflare Workers |
 | Database | Neon (PostgreSQL) |
-| Media | Contentful CDN |
+| Media | Cloudflare R2 |
 | Auth | Session-based (cookie + Hono middleware) |
 | Deployment | Cloudflare Workers + Wrangler |
 
@@ -84,7 +84,7 @@ Full documentation lives in `docs/`:
 - `docs/overview.md` — What LouLink is, target users, core user flows, verification model
 - `docs/architecture.md` — Technical architecture, build targets, routing
 - `docs/database.md` — Neon (PostgreSQL) schema, connection pattern, migrations
-- `docs/contentful.md` — Contentful CDN, asset upload flow, image optimization
+- `docs/storage.md` — Cloudflare R2 media storage, avatar upload flow, image proxy
 - `docs/auth.md` — Session-based auth, Hono middleware pattern, authorization rules
 - `docs/deployment.md` — Cloudflare Workers deployment, secrets management, custom domain
 - `docs/features.md` — MVP scope, post-MVP roadmap

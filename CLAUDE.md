@@ -42,7 +42,7 @@ This is a full-stack app that runs entirely on Cloudflare Workers. The single Wo
 - `types.ts` — shared TypeScript types + constants
 - `lib/` — avatar, cache, color, draft, seo, username, useNavigationWarning utilities
 - `components/` — icons + icon-map, ui + blob-shapes, Avatar, Directory
-- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, ForgotPassword, ResetPassword, Settings, ProfilePage, Analytics, AdminDashboard)
+- `pages/` — one file per route (Home, Dashboard, CreatePage, SignIn, SignUp, ForgotPassword, ResetPassword, Settings, ProfilePage, Analytics, AdminDashboard, Privacy)
 
 **How they connect:**
 
