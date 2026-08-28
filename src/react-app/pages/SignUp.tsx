@@ -7,6 +7,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { authClient, getJwt } from "../auth-client";
 import { useAuth } from "../auth-context";
 import { clearDraft } from "../lib/draft";
+import { trackEvent } from "../lib/tracker";
 import type { DraftItem } from "../types";
 import { useSeo } from "../lib/seo";
 import { validateUsername, useUsernameCheck } from "../lib/username";
@@ -113,6 +114,7 @@ export default function SignUp() {
       return;
     }
 
+    trackEvent("SIGNUP");
     clearDraft();
     await loadSession();
     navigate("/");
