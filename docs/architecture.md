@@ -31,6 +31,7 @@ src/
       seo.ts              # useSeo hook (document.title + noindex meta)
       username.ts         # validateUsername + useUsernameCheck (debounced availability check)
       useNavigationWarning.ts  # useNavigationWarning(isDirty) — blocks in-app navigation + beforeunload when form has unsaved changes
+      tracker.ts           # Thin wrapper around window.jws.track() for the jxsen analytics script (see CSP in architecture.md)
     components/
       icons.tsx           # Icon, IconPicker components
       icon-map.ts         # ICON_MAP + BRAND_COLORS registry (split out of icons.tsx)
@@ -38,6 +39,7 @@ src/
       blob-shapes.ts      # AVATAR_BLOB_SHAPES + BLOB_SHAPES SVG path data (split out of ui.tsx)
       Avatar.tsx          # AvatarImage, AvatarUpload
       Directory.tsx       # MemberCard, GroupedDirectory (home/dashboard member list)
+      Footer.tsx           # Site footer, rendered on every page via App.tsx Root layout
     pages/
       Home.tsx            # Public landing page + directory (logged-out)
       Dashboard.tsx       # Authenticated home (logged-in with profile) — lazy-loaded
@@ -53,7 +55,7 @@ src/
       Privacy.tsx         # /privacy — static privacy policy page
     assets/               # SVG logos, shape blobs, brand icons
   worker/
-    index.ts              # Hono app wiring — thin entrypoint (~40 lines), registers all route modules
+    index.ts              # Hono app wiring — thin entrypoint (~60 lines), registers all route modules
     analytics.ts          # isBot(), parseUserAgent(), classifyReferrer(), computeVisitorHash(), mergeJsonbCounts()
     cron.ts               # handleScheduled() — nightly rollup aggregation + raw event purge
     auth.ts               # requireAuth, optionalAuth, requireAdmin middleware

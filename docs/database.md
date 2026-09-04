@@ -61,7 +61,7 @@ One row per authenticated user. Created during onboarding after first login.
 | `display_name` | `text` NOT NULL | Public name shown on profile and directory |
 | `bio` | `text` | Short description, max 300 chars |
 | `avatar_asset_id` | `text` | R2 object key (e.g. `<user_id>/<timestamp>.jpg`) — resolved to `<origin>/avatars/<key>` by `avatarUrl()`; legacy rows with an `avatars/` prefix are handled |
-| `categories` | `text[]` | Array of granular subcategory slugs. 25 valid values grouped under 5 parent labels — see category hierarchy in `docs/features.md`. Validated server-side in `PUT /api/me/categories`. Admin PATCH uses simplified 5-item parent slugs only. |
+| `categories` | `text[]` | Array of granular subcategory slugs. 26 valid values grouped under 5 parent labels — see category hierarchy in `docs/features.md`. Validated server-side in `PUT /api/me/categories`. Admin PATCH uses simplified 5-item parent slugs only. |
 | `verified` | `boolean` DEFAULT false | Admin-controlled Louisville verification flag |
 | `hide_from_directory` | `boolean` DEFAULT false | Verified users can opt out of the home page directory; only honoured when `verified = true` |
 | `social_links` | `jsonb` DEFAULT `'{}'` | Platform → URL map for profile header social icons. Allowed keys: `YouTube`, `Instagram`, `Facebook`, `Twitter`, `Twitch`, `Spotify`, `Bandcamp`, `SoundCloud` |
@@ -161,7 +161,7 @@ Unique constraint on `(link_id, day)`.
 ```sql
 -- profiles
 CREATE UNIQUE INDEX profiles_username_idx ON public.profiles (username);
-CREATE INDEX profiles_verified_category_idx ON public.profiles (categories) WHERE verified = true;
+CREATE INDEX profiles_verified_categories_idx ON public.profiles USING gin (categories) WHERE verified = true;
 
 -- links
 CREATE INDEX links_user_sort_idx ON public.links (user_id, sort_order ASC);

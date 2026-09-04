@@ -38,7 +38,7 @@ The MVP is the minimum that makes LouLink useful to its first real users.
 - **Display name** — editable in settings (max 100 chars); also inline-editable on the Dashboard
 - **Bio** — short description, max 300 characters
 - **Profile appearance** — full theme system (see Theme System section below)
-- **Categories** — multi-select from 25 granular subcategory slugs grouped under 5 parent labels (see Category Hierarchy section below)
+- **Categories** — multi-select from 26 granular subcategory slugs grouped under 5 parent labels (see Category Hierarchy section below)
 - **Directory visibility** — verified users only: checkbox to hide profile from the home page (`hide_from_directory`)
 - **Username** — change with live availability check; 3–30 chars, lowercase alphanumeric + `-` and `_`
 
@@ -146,7 +146,7 @@ These features are explicitly out of scope until the MVP is stable.
 
 ### Categories & Filtering
 - Filter the home page directory by category (not yet wired up in the UI — grouped view exists but no filter persistence or URL params)
-- Multi-category multi-select is fully shipped (25 subcategory slugs, see Category Hierarchy in MVP section)
+- Multi-category multi-select is fully shipped (26 subcategory slugs, see Category Hierarchy in MVP section)
 
 ### Verification Self-Service
 - User submits a Louisville address or social proof
