@@ -34,35 +34,35 @@ type AnalyticsData = {
 // Chart helpers
 // ---------------------------------------------------------------------------
 
-function BarChart({ data, color = "#6b7280" }: { data: { label: string; value: number }[]; color?: string }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const barW = 10;
-  const gap = 3;
-  const H = 72;
-  const W = data.length * (barW + gap);
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: H, display: "block" }}>
-        {data.map((d, i) => {
-          const h = Math.max(2, (d.value / max) * H);
-          return (
-            <g key={i}>
-              <rect
-                x={i * (barW + gap)}
-                y={H - h}
-                width={barW}
-                height={h}
-                fill={color}
-                rx={2}
-                opacity={0.85}
-              />
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
+// function BarChart({ data, color = "#6b7280" }: { data: { label: string; value: number }[]; color?: string }) {
+//   const max = Math.max(...data.map((d) => d.value), 1);
+//   const barW = 10;
+//   const gap = 3;
+//   const H = 72;
+//   const W = data.length * (barW + gap);
+//   return (
+//     <div style={{ overflowX: "auto" }}>
+//       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: H, display: "block" }}>
+//         {data.map((d, i) => {
+//           const h = Math.max(2, (d.value / max) * H);
+//           return (
+//             <g key={i}>
+//               <rect
+//                 x={i * (barW + gap)}
+//                 y={H - h}
+//                 width={barW}
+//                 height={h}
+//                 fill={color}
+//                 rx={2}
+//                 opacity={0.85}
+//               />
+//             </g>
+//           );
+//         })}
+//       </svg>
+//     </div>
+//   );
+//}
 
 function HBar({ label, value, max, color = "#6b7280" }: { label: string; value: number; max: number; color?: string }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
@@ -217,32 +217,32 @@ export default function Analytics() {
           </div>
 
           {/* Views over time */}
-          {data.views_over_time.length > 0 && (
-            <Section title="Views over time">
-              <BarChart
-                data={data.views_over_time.map((d) => ({ label: d.day, value: d.views }))}
-                color={accent}
-              />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", opacity: 0.4, marginTop: "0.25rem" }}>
-                <span>{data.views_over_time[0]?.day}</span>
-                <span>{data.views_over_time[data.views_over_time.length - 1]?.day}</span>
-              </div>
-            </Section>
-          )}
+          {/*{data.views_over_time.length > 0 && (*/}
+          {/*  <Section title="Views over time">*/}
+          {/*    <BarChart*/}
+          {/*      data={data.views_over_time.map((d) => ({ label: d.day, value: d.views }))}*/}
+          {/*      color={accent}*/}
+          {/*    />*/}
+          {/*    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", opacity: 0.4, marginTop: "0.25rem" }}>*/}
+          {/*      <span>{data.views_over_time[0]?.day}</span>*/}
+          {/*      <span>{data.views_over_time[data.views_over_time.length - 1]?.day}</span>*/}
+          {/*    </div>*/}
+          {/*  </Section>*/}
+          {/*)}*/}
 
           {/* Link clicks over time */}
-          {data.clicks_over_time.length > 0 && (
-            <Section title="Link clicks over time">
-              <BarChart
-                data={data.clicks_over_time.map((d) => ({ label: d.day, value: d.clicks }))}
-                color="#10b981"
-              />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", opacity: 0.4, marginTop: "0.25rem" }}>
-                <span>{data.clicks_over_time[0]?.day}</span>
-                <span>{data.clicks_over_time[data.clicks_over_time.length - 1]?.day}</span>
-              </div>
-            </Section>
-          )}
+          {/*{data.clicks_over_time.length > 0 && (*/}
+          {/*  <Section title="Link clicks over time">*/}
+          {/*    <BarChart*/}
+          {/*      data={data.clicks_over_time.map((d) => ({ label: d.day, value: d.clicks }))}*/}
+          {/*      color="#10b981"*/}
+          {/*    />*/}
+          {/*    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", opacity: 0.4, marginTop: "0.25rem" }}>*/}
+          {/*      <span>{data.clicks_over_time[0]?.day}</span>*/}
+          {/*      <span>{data.clicks_over_time[data.clicks_over_time.length - 1]?.day}</span>*/}
+          {/*    </div>*/}
+          {/*  </Section>*/}
+          {/*)}*/}
 
           {/* Top links */}
           {data.links.length > 0 && (
